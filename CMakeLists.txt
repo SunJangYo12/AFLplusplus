@@ -56,6 +56,8 @@ set_target_properties(afl-showmap PROPERTIES COMPILE_FLAGS "-O2")
 
 file(GLOB afl-fuzz-c src/afl-fuzz*.c)
 
+add_definitions(-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
+
 add_executable(
     afl-fuzz
     ${afl-fuzz-c}
