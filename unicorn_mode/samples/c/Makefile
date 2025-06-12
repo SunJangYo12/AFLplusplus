@@ -1,52 +1,23 @@
-# UnicornAFL Usage
-# Original Unicorn Example Makefile by Nguyen Anh Quynh <aquynh@gmail.com>, 2015
-# Adapted for AFL++ by domenukk <domenukk@gmail.com>, 2020
-.POSIX:
-UNAME_S =$(shell uname -s)# GNU make
-UNAME_S:sh=uname -s       # BSD make
-
 UNICORNAFL_LIB = ../../unicornafl/build
-UNICORN_LIB = ../../unicornafl/unicorn/build
-BIN_EXT =
-AR_EXT = a
+UNICORN_LIB = ../../unicornafl/build/unicorn
 
-# Verbose output?
-V ?= 0
+CC = /media/jin/4abb279b-6d65-4663-97c2-26987f64673a/home/yuna/LabTes/fuzzing-firmware/termux/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
 
 CFLAGS += -Wall -Werror -I../../unicornafl/unicorn/include -I../../unicornafl/include
-
-LDFLAGS += -L$(UNICORNAFL_LIB) -L$(UNICORN_LIB) -lunicorn -lunicornafl -lpthread -lm -lstdc++
-
-ifeq ($(UNAME), Linux)
-# do something Linux-y
-LRT = -lrt
-else
-LRT = 
-endif
-
-LDFLAGS += $(LRT)
+LDFLAGS += -L$(UNICORNAFL_LIB) -L$(UNICORN_LIB) -lunicorn -lunicornafl -pthread -lm -lstdc++
 
 .PHONY: all clean
 
 all: harness
 
 clean:
-	rm -rf *.o harness harness-debug
+	rm -rf *.o harness
 
-harness.o: harness.c ../../unicornafl/unicorn/include/unicorn/*.h
+harness.o:
 	${CC} ${CFLAGS} -O3 -c harness.c
 
-harness-debug.o: harness.c ../../unicornafl/unicorn/include/unicorn/*.h
-	${CC} ${CFLAGS} -g -c harness.c -o $@
-
-../../unicornafl/build/libunicornafl.a:
-	cd ../.. && ./build_unicorn_support.sh
-
 harness: harness.o
-	${CC} harness.o ../../unicornafl/build/libunicornafl.a $(LDFLAGS) -o $@
-
-debug: harness-debug.o
-	${CC} harness.o ../../unicornafl/build/libunicornafl.a $(LDFLAGS) -o harness-debug
+	${CC} harness.o ../../unicornafl/build/libunicornafl.so $(LDFLAGS) -o $@
 
 fuzz: harness
-	DYLD_FALLBACK_LIBRARY_PATH="../../unicornafl/unicorn/build" LD_LIBRARY_PATH="../../unicornafl/unicorn/build" ../../../afl-fuzz -m none -i sample_inputs -o out -- ./harness @@
+	LD_LIBRARY_PATH="../../unicornafl/unicorn/build" ../../../afl-fuzz -m none -i sample_inputs -o out -- ./harness @@
