@@ -1,6 +1,6 @@
 # ===============================================
-# Compile afl-fuzz
-# Author: Eric Le Guevel
+# Compile afl-showmap & afl-fuzz
+# Author: Eric Le Guevel & sunjangyo12
 # Date: 2023-03-28
 # ===============================================
 
@@ -18,6 +18,37 @@ add_compile_options(
     -Wno-macro-redefined
     -Wno-deprecated
 )
+
+# ========
+# afl-showmap
+# ========
+
+file(GLOB afl-showmap-c src/afl-showmap.c)
+
+add_executable(
+    afl-showmap
+    ${afl-showmap-c}
+    "src/afl-common.c"
+    "src/afl-forkserver.c"
+    "src/afl-sharedmem.c"
+    "src/afl-performance.c"
+    "src/afl-fuzz-mutators.c"
+)
+
+target_include_directories(afl-showmap AFTER PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+target_compile_definitions(
+    afl-showmap
+    PRIVATE DOC_PATH=\"/usr/local/share/doc/afl\"
+    PRIVATE BIN_PATH=\"/usr/local/bin\"
+    PRIVATE AFL_PATH=\"/usr/local/lib/afl\"
+    PRIVATE _FORTIFY_SOURCE=2
+)
+
+set_target_properties(afl-showmap PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(afl-showmap PROPERTIES COMPILE_FLAGS "-O2")
+
+
 
 # ========
 # afl-fuzz
