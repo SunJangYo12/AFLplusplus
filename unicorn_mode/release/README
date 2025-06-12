@@ -1,0 +1,9 @@
+1.) python binding unicorn
+    $ tar xf myunicorn.tar.gz
+    $ mv unicorn* /data/data/com.termux/files/usr/lib/python3.12/site-packages
+    $ python
+    >>> import unicorn
+
+  NOTE: karena install unicorn dari pip bawaan termux selalu gagal, maka saya
+        gunakan ini yang awalnya copy semua dari pip x86_64 dan hanya mengganti
+        lib hasil dari build ini.
