@@ -41,7 +41,7 @@ NDK_PATH="/media/jin/4abb279b-6d65-4663-97c2-26987f64673a/home/yuna/LabTes/fuzzi
 cd ..
 rm -rf build
 mkdir build && cd build
-/media/jin/6a76baf7-5d55-4bae-ac03-6cb70d5d180d/Tools/cmake-4.0.2-linux-x86_64/bin/cmake -DANDROID_PLATFORM=31 \
+cmake -DANDROID_PLATFORM=31 \
         -DCMAKE_TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake" \
         -DANDROID_ABI=arm64-v8a ..
 make
@@ -173,33 +173,13 @@ unset CFLAGS
 
 echo "[+] All checks passed!"
 
-echo "[*] Making sure unicornafl is checked out"
-
-git status 1>/dev/null 2>/dev/null
-if [ $? -eq 0 ]; then
-  echo "[*] initializing unicornafl submodule"
-  git submodule init || exit 1
-  git submodule update ./unicornafl 2>/dev/null # ignore errors
-  git submodule sync ./unicornafl 2>/dev/null # ignore errors
-else
-  echo "[*] cloning unicornafl"
-  test -d unicornafl/.git || {
-    CNT=1
-    while [ '!' -d unicornafl/.git -a "$CNT" -lt 4 ]; do
-      echo "Trying to clone unicornafl (attempt $CNT/3)"
-      git clone https://github.com/sunjangyo12/unicornafl
-      CNT=`expr "$CNT" + 1`
-    done
-  }
-fi
-
-test -e unicornafl/.git || { echo "[-] not checked out, please install git or check your internet connection." ; exit 1 ; }
+git clone https://github.com/sunjangyo12/unicornafl
 echo "[+] Got unicornafl."
 
 cd "unicornafl" || exit 1
 echo "[*] Checking out $UNICORNAFL_VERSION"
-git pull
-sh -c 'git stash && git stash drop' 1>/dev/null 2>/dev/null
+#git pull
+#sh -c 'git stash && git stash drop' 1>/dev/null 2>/dev/null
 git checkout "$UNICORNAFL_VERSION" || exit 1
 
 echo "[*] making sure AFL++ header files match"
