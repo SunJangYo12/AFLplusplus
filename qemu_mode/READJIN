@@ -1,0 +1,6 @@
+1.) fix error gettext -lpthread >> go gettext/gettext-tools/test/Makefile >> edit -lpthread to -pthread
+
+2.) apply patch after clone qemuafl or someting with:
+    $ cp android-qemu-afl.patch qemuafl
+    $ cd qemuafl
+    $ patch -p1 < android-qemu-afl.patch
