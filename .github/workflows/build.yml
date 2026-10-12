@@ -41,7 +41,6 @@ jobs:
           mkdir -p output
 
           cp mylog.txt output/
-          cp -R frida-out output || true
 
           tar czvf result.tar.gz \
             -C output .
