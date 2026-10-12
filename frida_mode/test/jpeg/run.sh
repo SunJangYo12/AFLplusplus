@@ -37,6 +37,6 @@ echo "AFL workers  : $JOBS"
 	-d \
 	-O \
 	-c 0\
-	-V $DURATION \
+	-V 5 \
 	-- \
 		build/test 2147483647
