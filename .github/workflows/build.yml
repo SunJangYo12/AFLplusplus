@@ -30,9 +30,10 @@ jobs:
            set -o pipefail
 
            {
-              bash frida_mode/test/jpeg/run.sh
+              cd frida_mode/test/jpeg
+              bash run.sh
 
-           } 2>&1 | tee -a mylog.txt
+           } 2>&1 | tee -a ~/mylog.txt
 
       - name: Collect artifacts
         run: |
