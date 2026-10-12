@@ -26,7 +26,7 @@ JOBS="$CPU_COUNT"
 echo "CPU tersedia : $CPU_COUNT"
 echo "AFL workers  : $JOBS"
 
-
+exit
 
 # Master
 ../../../afl-fuzz \
