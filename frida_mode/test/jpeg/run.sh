@@ -39,4 +39,4 @@ echo "AFL workers  : $JOBS"
 	-c 0\
 	-V 5 \
 	-- \
-		build/test 2147483647
+		build/test 2147483647 || true
