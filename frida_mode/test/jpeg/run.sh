@@ -17,6 +17,6 @@ AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 \
 	-d \
 	-O \
 	-c 0\
-	-V 30 \
+	-V 19800 \
 	-- \
 		build/test 2147483647
