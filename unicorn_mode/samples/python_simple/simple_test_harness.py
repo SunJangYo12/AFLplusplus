@@ -14,6 +14,8 @@
    $ ../../../afl-fuzz -U -m none -i ./sample_inputs -o ./output -- python simple_test_harness.py @@ 
 """
 
+import distutils.sysconfig
+
 import argparse
 import os
 import signal

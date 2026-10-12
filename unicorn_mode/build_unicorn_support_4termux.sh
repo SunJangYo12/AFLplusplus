@@ -41,7 +41,7 @@ NDK_PATH="/media/jin/4abb279b-6d65-4663-97c2-26987f64673a/home/yuna/LabTes/fuzzi
 cd ..
 rm -rf build
 mkdir build && cd build
-cmake -DANDROID_PLATFORM=31 \
+/media/jin/6a76baf7-5d55-4bae-ac03-6cb70d5d180d/Tools/cmake-4.0.2-linux-x86_64/bin/cmake -DANDROID_PLATFORM=31 \
         -DCMAKE_TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake" \
         -DANDROID_ABI=arm64-v8a ..
 make
@@ -49,7 +49,7 @@ echo "[*] Building afl-showmap done."
 mv afl-fuzz afl-showmap ..
 
 cd ../unicorn_mode
-
+exit
 sleep 2
 
 
