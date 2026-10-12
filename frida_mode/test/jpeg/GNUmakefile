@@ -20,7 +20,7 @@ HARNESS_URL:="https://raw.githubusercontent.com/AFLplusplus/AFLplusplus/stable/u
 
 JPEGTEST_FILE:=$(JPEGTEST_BUILD_DIR)target.cc
 JPEGTEST_OBJ:=$(JPEGTEST_BUILD_DIR)target.o
-JPEGTEST_URL:="https://raw.githubusercontent.com/google/fuzzbench/master/benchmarks/libjpeg-turbo-07-2017/libjpeg_turbo_fuzzer.cc"
+JPEGTEST_URL:="https://github.com/google/fuzzbench/raw/refs/heads/master/benchmarks/libjpeg-turbo_libjpeg_turbo_fuzzer/libjpeg_turbo_fuzzer.cc"
 
 LDFLAGS += -lpthread
 
@@ -130,7 +130,7 @@ frida: $(TEST_BIN) $(AFLPP_FRIDA_DRIVER_HOOK_OBJ) $(TEST_DATA_FILE)
 	AFL_FRIDA_PERSISTENT_CNT=1000000 \
 	AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 \
 	AFL_NO_AFFINITY=1 \
-	X__AFL_NO_UI=1 \
+	AFL_NO_UI=1 \
 	AFL_PATH=/out \
 	AFL_SHUFFLE_QUEUE=1 \
 	AFL_SKIP_CPUFREQ=1 \
@@ -147,7 +147,7 @@ frida: $(TEST_BIN) $(AFLPP_FRIDA_DRIVER_HOOK_OBJ) $(TEST_DATA_FILE)
 		-d \
 		-O \
 		-c 0\
-		-V 30 \
+		-V 300 \
 		-- \
 			$(TEST_BIN) 2147483647
 
