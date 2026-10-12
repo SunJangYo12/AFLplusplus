@@ -40,8 +40,8 @@ jobs:
         run: |
           mkdir -p output
 
-          cp mylog.txt output/
-          cp -R frida-out output
+          cp ~/mylog.txt output/
+          cp -R ~/frida-out output
 
           tar czvf result.tar.gz \
             -C output .
