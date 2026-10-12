@@ -1,15 +1,35 @@
-AFL_NO_UI=1 \
-AFL_DEBUG_CHILD=1 \
-AFL_DISABLE_TRIM=1 \
-AFL_FRIDA_PERSISTENT_CNT=1000000 \
-AFL_NO_AFFINITY=1 \
-AFL_TESTCACHE_SIZE=2 \
-AFL_FRIDA_PERSISTENT_HOOK=../../build/frida_hook.so \
-AFL_FRIDA_PERSISTENT_ADDR=0x5555555563e2 \
-AFL_ENTRYPOINT=0x5555555563e2 \
-AFL_SKIP_CPUFREQ=1 \
-AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 \
+export AFL_NO_UI=1
+export AFL_DEBUG_CHILD=1
+export AFL_DISABLE_TRIM=1
+export AFL_FRIDA_PERSISTENT_CNT=1000000
+export AFL_NO_AFFINITY=1
+export AFL_TESTCACHE_SIZE=2
+export AFL_FRIDA_PERSISTENT_HOOK=../../build/frida_hook.so
+export AFL_FRIDA_PERSISTENT_ADDR=0x5555555563e2
+export AFL_ENTRYPOINT=0x5555555563e2
+export AFL_SKIP_CPUFREQ=1
+export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+
+# Durasi fuzzing dalam detik
+DURATION="${DURATION:-30}"
+
+
+# Deteksi CPU yang tersedia
+if command -v nproc >/dev/null 2>&1; then
+    CPU_COUNT="$(nproc)"
+else
+    CPU_COUNT="$(getconf _NPROCESSORS_ONLN)"
+fi
+
+JOBS="$CPU_COUNT"
+echo "CPU tersedia : $CPU_COUNT"
+echo "AFL workers  : $JOBS"
+
+
+
+# Master
 ../../../afl-fuzz \
+	-M master \
 	-i build/in/ \
 	-o build/frida-out \
 	-m none \
@@ -17,6 +37,38 @@ AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 \
 	-d \
 	-O \
 	-c 0\
-	-V 2 \
+	-V $DURATION \
 	-- \
-		build/test 2147483647 || true
+		build/test 2147483647 &
+PIDS+=("$!")
+
+
+# Slaves
+for ((i = 1; i < JOBS; i++)); do
+	../../../afl-fuzz \
+		-S "slave$i" \
+		-i build/in/ \
+		-o build/frida-out \
+		-m none \
+		-t 1000+ \
+		-d \
+		-O \
+		-c 0\
+		-V $DURATION \
+		-- \
+			build/test 2147483647 &
+    PIDS+=("$!")
+done
+
+
+# Tunggu seluruh proses selesai.
+STATUS=0
+for pid in "${PIDS[@]}"; do
+    wait "$pid" || STATUS=1
+done
+
+PIDS=()
+trap - INT TERM EXIT
+
+echo "Semua worker selesai."
+exit "$STATUS"
