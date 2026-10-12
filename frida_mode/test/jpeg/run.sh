@@ -11,7 +11,8 @@ export AFL_SKIP_CPUFREQ=1
 export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
 
 # Durasi fuzzing dalam detik
-DURATION="${DURATION:-19800}" #5.5 jam
+#DURATION="${DURATION:-19800}" #5.5 jam
+DURATION="${DURATION:-30}" #30 detik
 
 
 # Deteksi CPU yang tersedia
