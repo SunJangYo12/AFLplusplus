@@ -25,16 +25,14 @@ jobs:
           sudo apt-get install -y wget curl # for Frida mode
           sudo apt-get install -y python3-pip # for Unicorn mode
 
-      - name: Build with AFL and frida_mode
+      - name: Running AFL++
         run: |
            set -o pipefail
 
            {
-             make distrib || true
-             cd frida_mode || true
-             make ARCH=x86 frida || true
+              bash frida_mode/test/jpeg/run.sh
 
-           } 2>&1 | tee -a ../mylog.txt
+           } 2>&1 | tee -a mylog.txt
 
       - name: Collect artifacts
         run: |

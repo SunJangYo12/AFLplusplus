@@ -34,9 +34,6 @@ afl-clang-lto.8
 afl-cmin.8
 afl-cmin.bash.8
 afl-cs-proxy
-afl-frida-trace.so
-afl-fuzz
-afl-fuzz.8
 afl-g++
 afl-g++.8
 afl-gcc
@@ -66,7 +63,6 @@ a.out
 as
 compile_commands.json
 core*
-examples/afl_frida/afl-frida
 examples/afl_frida/frida-gum-example.c
 examples/afl_frida/frida-gum.h
 examples/afl_frida/libtestinstr.so

@@ -1,0 +1,13 @@
+# environment variables:
+AFL_DEBUG_CHILD=1
+AFL_DISABLE_TRIM=1
+AFL_ENTRYPOINT=0x5555555563e2
+AFL_FRIDA_PERSISTENT_ADDR=0x5555555563e2
+AFL_FRIDA_PERSISTENT_CNT=1000000
+AFL_FRIDA_PERSISTENT_HOOK=../../build/frida_hook.so
+AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+AFL_NO_AFFINITY=1
+AFL_SKIP_CPUFREQ=1
+AFL_TESTCACHE_SIZE=2
+# command line:
+'../../../afl-fuzz' '-i' 'build/in/' '-o' 'build/frida-out' '-m' 'none' '-t' '1000+' '-d' '-O' '-c' '0' '--' 'build/test' '2147483647'
