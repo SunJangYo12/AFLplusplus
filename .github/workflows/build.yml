@@ -27,7 +27,11 @@ jobs:
 
       - name: Running AFL++
         run: |
-          cd frida_mode/test/jpeg
+          cd frida_mode/test/jpeg/build
+          tar xf result.tar.gz
+
+          cd ..
+
           bash run.sh > ~/mylog.txt 2>&1 || true
           pkill -9 -f build/test || true
           pkill -9 afl-fuzz || true
