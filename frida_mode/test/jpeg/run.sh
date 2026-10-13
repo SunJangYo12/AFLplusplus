@@ -37,6 +37,6 @@ echo "AFL workers  : $JOBS"
 	-d \
 	-O \
 	-c 0\
-	-V 5 \
+	-V 30 \
 	-- \
 		build/test 2147483647 > build/frida-out/master.log 2>&1 &
