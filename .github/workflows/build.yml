@@ -27,6 +27,14 @@ jobs:
 
       - name: Running AFL++
         run: |
+          cd frida_mode/test/jpeg
+          bash run.sh > ~/mylog.txt 2>&1 || true
+          pkill -9 -f build/test || true
+          pkill -9 afl-fuzz || true
+          cp -R build/frida-out ~ || true
+
+      - name: Running AFL++
+        run: |
            set -o pipefail
 
            {
