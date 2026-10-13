@@ -28,6 +28,8 @@ echo "AFL workers  : $JOBS"
 
 mkdir -p build/frida-out
 
+PIDS=()
+
 # Master
 ../../../afl-fuzz \
 	-M master \
