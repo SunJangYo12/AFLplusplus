@@ -40,3 +40,19 @@ echo "AFL workers  : $JOBS"
 	-- \
 		build/test 2147483647 > master.log 2>&1 &
 
+
+# Slaves
+for ((i = 1; i < JOBS; i++)); do
+	../../../afl-fuzz \
+		-S "slave$i" \
+		-i build/in/ \
+		-o build/frida-out \
+		-m none \
+		-t 1000+ \
+		-d \
+		-O \
+		-c 0\
+		-V $DURATION \
+		-- \
+			build/test 2147483647 > master.log 2>&1 &
+done
