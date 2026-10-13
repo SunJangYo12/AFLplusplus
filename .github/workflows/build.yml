@@ -33,9 +33,9 @@ jobs:
               cd frida_mode/test/jpeg
               bash run.sh
 
+              pwd
               ls
-              cd frida_mode/test/jpeg
-              cp -R build/frida-out ~
+              cp -R build/frida-out ~ || true
 
            } 2>&1 | tee -a ~/mylog.txt
 
@@ -43,8 +43,8 @@ jobs:
         run: |
           mkdir -p output
 
-          cp ~/mylog.txt output/
-          cp -R ~/frida-out output
+          cp ~/mylog.txt output/ || true
+          cp -R ~/frida-out output || true
 
           tar czvf result.tar.gz \
             -C output .
