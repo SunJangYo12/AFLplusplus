@@ -26,6 +26,8 @@ JOBS="$CPU_COUNT"
 echo "CPU tersedia : $CPU_COUNT"
 echo "AFL workers  : $JOBS"
 
+mkdir -p build/frida-out
+
 # Master
 ../../../afl-fuzz \
 	-M master \
