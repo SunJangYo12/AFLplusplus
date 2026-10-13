@@ -33,18 +33,6 @@ jobs:
           pkill -9 afl-fuzz || true
           cp -R build/frida-out ~ || true
 
-      - name: Running AFL++
-        run: |
-           set -o pipefail
-
-           {
-              cd frida_mode/test/jpeg
-              bash run.sh || true
-
-              cp -R build/frida-out ~ || true
-
-           } 2>&1 | tee -a ~/mylog.txt
-
       - name: Collect artifacts
         run: |
           mkdir -p output
