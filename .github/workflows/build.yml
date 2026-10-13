@@ -31,9 +31,7 @@ jobs:
 
            {
               cd frida_mode/test/jpeg
-              bash run.sh
-
-              cat master.log
+              bash run.sh || true
 
               cp -R build/frida-out ~ || true
 

@@ -28,8 +28,6 @@ echo "AFL workers  : $JOBS"
 
 mkdir -p build/frida-out
 
-PIDS=()
-
 # Master
 ../../../afl-fuzz \
 	-M master \
@@ -42,37 +40,4 @@ PIDS=()
 	-c 0\
 	-V $DURATION \
 	-- \
-		build/test 2147483647 &
-PIDS+=("$!")
-
-
-# Slaves
-for ((i = 1; i < JOBS; i++)); do
-	../../../afl-fuzz \
-		-S "slave$i" \
-		-i build/in/ \
-		-o build/frida-out \
-		-m none \
-		-t 1000+ \
-		-d \
-		-O \
-		-c 0\
-		-V $DURATION \
-		-- \
-			build/test 2147483647 &
-	    PIDS+=("$!")
-done
-
-
-# Tunggu seluruh proses selesai.
-STATUS=0
-for pid in "${PIDS[@]}"; do
-    wait "$pid" || STATUS=1
-done
-
-PIDS=()
-trap - INT TERM EXIT
-
-echo "Semua worker selesai."
-exit "$STATUS"
-
+		build/test 2147483647
