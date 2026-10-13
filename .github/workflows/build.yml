@@ -33,7 +33,9 @@ jobs:
               cd frida_mode/test/jpeg
               bash run.sh
 
-              cp -R frida_mode/test/jpeg/build/frida-out ~
+              ls
+              cd frida_mode/test/jpeg
+              cp -R build/frida-out ~
 
            } 2>&1 | tee -a ~/mylog.txt
 
