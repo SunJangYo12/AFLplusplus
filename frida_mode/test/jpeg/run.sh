@@ -26,7 +26,6 @@ JOBS="$CPU_COUNT"
 echo "CPU tersedia : $CPU_COUNT"
 echo "AFL workers  : $JOBS"
 
-
 # Master
 ../../../afl-fuzz \
 	-M master \
@@ -37,6 +36,23 @@ echo "AFL workers  : $JOBS"
 	-d \
 	-O \
 	-c 0\
-	-V 30 \
+	-V $DURATION \
 	-- \
-		build/test 2147483647 > build/frida-out/master.log &
+		build/test 2147483647 2>&1 &
+
+
+# Slaves
+for ((i = 1; i < JOBS; i++)); do
+	../../../afl-fuzz \
+		-S "slave$i" \
+		-i build/in/ \
+		-o build/frida-out \
+		-m none \
+		-t 1000+ \
+		-d \
+		-O \
+		-c 0\
+		-V $DURATION \
+		-- \
+			build/test 2147483647 2>&1 &
+done
