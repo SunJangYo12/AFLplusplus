@@ -40,7 +40,7 @@ mkdir -p build/frida-out
 	-c 0\
 	-V $DURATION \
 	-- \
-		build/test 2147483647 > master.log 2>&1 &
+		build/test 2147483647 &
 
 
 # Slaves
@@ -56,5 +56,5 @@ for ((i = 1; i < JOBS; i++)); do
 		-c 0\
 		-V $DURATION \
 		-- \
-			build/test 2147483647 > slave.log 2>&1 &
+			build/test 2147483647 &
 done
