@@ -33,10 +33,8 @@ jobs:
               cd frida_mode/test/jpeg
               bash run.sh
 
-              pwd
-              ls
-              echo "zzzzzzzzzzzzz"
-              ls build
+              cat master.log
+
               cp -R build/frida-out ~ || true
 
            } 2>&1 | tee -a ~/mylog.txt
