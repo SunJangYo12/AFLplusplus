@@ -41,6 +41,7 @@ mkdir -p build/frida-out
 	-V $DURATION \
 	-- \
 		build/test 2147483647 &
+PIDS+=("$!")
 
 
 # Slaves
@@ -57,4 +58,19 @@ for ((i = 1; i < JOBS; i++)); do
 		-V $DURATION \
 		-- \
 			build/test 2147483647 &
+	    PIDS+=("$!")
 done
+
+
+# Tunggu seluruh proses selesai.
+STATUS=0
+for pid in "${PIDS[@]}"; do
+    wait "$pid" || STATUS=1
+done
+
+PIDS=()
+trap - INT TERM EXIT
+
+echo "Semua worker selesai."
+exit "$STATUS"
+
