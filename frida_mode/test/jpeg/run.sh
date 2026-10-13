@@ -12,7 +12,7 @@ export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
 
 # Durasi fuzzing dalam detik
 #DURATION="${DURATION:-19800}" #5.5 jam
-DURATION="${DURATION:-5}" #30 detik
+DURATION="${DURATION:-30}" #30 detik
 
 
 # Deteksi CPU yang tersedia
@@ -54,5 +54,5 @@ for ((i = 1; i < JOBS; i++)); do
 		-c 0\
 		-V $DURATION \
 		-- \
-			build/test 2147483647 > master.log 2>&1 &
+			build/test 2147483647 > slave.log 2>&1 &
 done
