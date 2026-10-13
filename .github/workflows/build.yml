@@ -37,7 +37,7 @@ jobs:
               ls
               echo "zzzzzzzzzzzzz"
               ls build
-              cp -R build/frida-out/* ~ || true
+              cp -R build/frida-out ~ || true
 
            } 2>&1 | tee -a ~/mylog.txt
 
