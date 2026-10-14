@@ -11,7 +11,7 @@ on:
     inputs:
       duration:
         description: "Durasi fuzzing per sesi"
-        default: "5h"
+        default: "1m"
   push:
     branches: [v4.32c-fuzzing-inci]
     paths:
@@ -69,7 +69,7 @@ jobs:
             export AFL_AUTORESUME=1
           fi
 
-          timeout -s INT -k 2m "${{ inputs.duration || '5h' }}" \
+          timeout -s INT -k 2m "${{ inputs.duration || '1m' }}" \
             bash run.sh > ~/mylog.txt 2>&1 || true
 
           pkill -9 -f build/test || true
