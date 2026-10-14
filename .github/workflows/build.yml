@@ -57,6 +57,7 @@ jobs:
             tar xzf prev/state.tar.gz -C ~/frida-out-prev
           fi
 
+
       - name: Running AFL++
         run: |
           cd frida_mode/test/jpeg/build
