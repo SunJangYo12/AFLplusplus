@@ -65,7 +65,11 @@ jobs:
 
           # lanjutkan dari output sesi sebelumnya kalau ada
           if [ -d ~/frida-out-prev/frida-out ]; then
-            cp -R ~/frida-out-prev/frida-out build/frida-out
+
+            rm -rf build/frida-out
+            mkdir -p build/frida-out
+
+            cp -a ~/frida-out-prev/frida-out/. build/frida-out
             export AFL_AUTORESUME=1
           fi
 
@@ -74,15 +78,21 @@ jobs:
 
           pkill -9 -f build/test || true
           pkill -9 afl-fuzz || true
-          cp -R build/frida-out ~ || true
+
+          rm -rf ~/frida-out
+          mkdir -p ~/frida-out
+          cp -a build/frida-out/. ~/frida-out/ || true
+
 
       - name: Collect artifacts
         if: always()
         run: |
-          mkdir -p output
+          mkdir -p output/frida-out
           cp ~/mylog.txt output/ || true
-          cp -R ~/frida-out output || true
+
+          cp -a ~/frida-out/. output/frida-out/ || true
           tar czf state.tar.gz -C output .
+
 
       - name: Upload artifact
         if: always() # pelindung data alias tetap upload walau error
