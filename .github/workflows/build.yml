@@ -1,5 +1,10 @@
 name: Fuzzing fridamode-libjpeg
 
+# STOP: gh workflow disable "Fuzzing fridamode-libjpeg"
+# gh run cancel 38494535088 --force
+# START:
+# gh workflow list --all        # lihat status: active / disabled_manually
+# gh workflow enable "Fuzzing fridamode-libjpeg"
 
 on:
   workflow_dispatch:
