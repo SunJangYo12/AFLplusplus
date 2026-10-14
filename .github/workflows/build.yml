@@ -58,6 +58,7 @@ jobs:
           fi
 
 
+
       - name: Running AFL++
         run: |
           cd frida_mode/test/jpeg/build
