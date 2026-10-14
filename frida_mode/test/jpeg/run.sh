@@ -30,7 +30,7 @@ mkdir -p build/frida-out
 # Master
 ../../../afl-fuzz \
 	-M master \
-	-i- \
+	-i build/in \
 	-o build/frida-out \
 	-m none \
 	-t 1000+ \
@@ -47,7 +47,7 @@ for ((i = 1; i < JOBS; i++)); do
 
 	../../../afl-fuzz \
 		-S "slave$i" \
-		-i- \
+		-i build/in \
 		-o build/frida-out \
 		-m none \
 		-t 1000+ \
