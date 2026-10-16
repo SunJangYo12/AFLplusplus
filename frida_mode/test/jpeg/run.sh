@@ -46,6 +46,7 @@ for ((i = 1; i < JOBS; i++)); do
 
 	../../../afl-fuzz \
 		-S "slave$i" \
+		-D \
 		-i build/in \
 		-o build/frida-out \
 		-m none \
