@@ -1,7 +1,7 @@
 name: Build PHP fuzzers (AFL++)
 
 # Build sekali, simpan di GitHub Release. Workflow "Fuzz PHP" mengambil binary dari sini.
-# Jalankan ulang hanya jika PHP_COMMIT / flag build berubah.
+# Jalankan ulang hanya jika PHP_COMMIT / flag build berubah. zzz
 
 on:
   workflow_dispatch: # gh workflow run build.yml --ref v4.32c-fuzzing-inci-php-magma
