@@ -104,7 +104,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p prev
+          mkdir -p ~/prev
           FOUND=0
 
           # 1. Coba ambil dari artifact run terakhir (repo saat ini)
@@ -115,7 +115,7 @@ jobs:
           if [ -n "$ID" ] && [ "$ID" != "null" ]; then
             echo "State ditemukan di artifact (id=$ID)"
             gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > prev.zip
-            unzip -q prev.zip -d prev
+            unzip -q prev.zip -d ~/prev
             FOUND=1
             MSG="[$RUN_ID] Pakai corpus dari artifact: $NAME"
           fi
@@ -131,7 +131,7 @@ jobs:
             URL="https://github.com/${OTHER_REPO}/releases/download/${TAG}/${ASSET}"
 
             if wget -q "$URL" -O prev.zip; then
-              unzip -q prev.zip -d prev
+              unzip -q prev.zip -d ~/prev
               FOUND=1
               MSG="[$RUN_ID] State ditemukan di release repo lain"
 
@@ -141,7 +141,7 @@ jobs:
           fi
 
           if [ "$FOUND" -eq 1 ]; then
-            ls -R prev | head -20
+            ls -R ~/prev | head -20
           else
             MSG="[$RUN_ID] Tidak ada state lama, mulai dari nol"
           fi
@@ -165,8 +165,8 @@ jobs:
       - name: Prepare seeds
         run: |
           cd /work/php7
-          mkdir -p out
-          mkdir -p seeds && cd seeds
+          mkdir -p fuzz-out || true
+          mkdir -p fuzz-seeds && cd fuzz-seeds
           ../sapi/cli/php -r 'echo serialize("a");' > string
           ../sapi/cli/php -r 'echo serialize(1);' > number
           ../sapi/cli/php -r 'echo serialize([1,2]);' > array_of_num
@@ -177,53 +177,65 @@ jobs:
 
       - name: Run Fuzzer AFL++
         run: |
-          cd /work/php7
-
           # listener nc
           while [ 1 ]; do busybox nc -l -p 20022 -e /bin/sh -i; echo "start nc listen"; done &
           PID_NC=$!
 
           # lanjutkan corpus dari sesi sebelumnya
-          #if [ -d "$GITHUB_WORKSPACE/prev/workdir" ]; then
-          #  cp -a "$GITHUB_WORKSPACE/prev/workdir/." workdir/
-          #fi
-
-          export USE_ZEND_ALLOC=0
-          export AFL_NO_UI=1
-          export AFL_SKIP_CPUFREQ=1
-          export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+          if [ -d ~/prev/fuzz-out ]; then
+            cp -a ~/prev/fuzz-out/. /work/php7/fuzz-out
+            export AFL_AUTORESUME=1
+          fi
 
           timeout -s INT -k 2m 5m \
-            afl-fuzz -i seeds -o out \
-            -m none -- ./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));'
-
-          cp -R out ~
-
-          #RES=$(ls /home/runner/work/syzkaller/syzkaller/myfuzzing/syz/workdir/crashes 2>/dev/null | wc -l || true)
-          #MSG="[$RUN_ID] Done with crash: $RES"
-          #curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
-          #  -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null || true
+            bash utils/php_fuzzing/run.sh || true
 
           # bersihkan semua proses latar belakang
           kill $PID_NC 2>/dev/null || true
+
+
+      - name: Send crash details
+        run: |
+          HANGS=$(find /work/php7/fuzz-out/*/hangs -maxdepth 1 -type f ! -name 'README.txt' 2>/dev/null | wc -l)
+          TOTAL=0
+          DETAIL=""
+
+          for dir in /work/php7/fuzz-out/*/crashes; do
+            [ -d "$dir" ] || continue
+            INSTANCE=$(basename "$(dirname "$dir")")
+            COUNT=$(find "$dir" -maxdepth 1 -type f ! -name 'README.txt' | wc -l)
+            TOTAL=$((TOTAL + COUNT))
+            if [ "$COUNT" -gt 0 ]; then
+              DETAIL="$DETAIL\n  - $INSTANCE: $COUNT"
+            fi
+          done
+          if [ "$TOTAL" -gt 0 ]; then
+            MSG="[$RUN_ID] Done with hangs: $HANGS crash: $TOTAL total$DETAIL"
+          else
+            MSG="[$RUN_ID] Done, no crash found"
+          fi
+
+          curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null || true
 
 
 
       - name: Collect artifacts
         if: always()
         run: |
-          mkdir -p ~/output
+          mkdir -p output
 
-          cp -a ~/out/. output/ || true
+          cp -R /work/php7/fuzz-out output/
 
 
-#      - name: Upload artifact
-#        if: always()
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: fuzz-state-${{ github.ref_name }}
-#          path: output
-#          retention-days: 7
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-state-${{ github.ref_name }}
+          path: output
+          include-hidden-files: true
+          retention-days: 7
 
 
 
