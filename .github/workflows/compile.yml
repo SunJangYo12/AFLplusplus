@@ -4,6 +4,8 @@ name: Build PHP fuzzers (AFL++)
 # Jalankan ulang hanya jika PHP_COMMIT / flag build berubah. zzz
 
 on:
+  push:
+    branches: [v4.32c-fuzzing-inci-php-magma]
   workflow_dispatch: # gh workflow run compile.yml --ref v4.32c-fuzzing-inci-php-magma
 
 permissions:
