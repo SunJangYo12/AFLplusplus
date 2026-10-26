@@ -42,9 +42,9 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          sudo apt-get install -y \
             git ssh openssh-client curl jq \
-            busybox-static netcat-openbsd afl++ \
+            busybox-static netcat-openbsd \
             apache2 php libapache2-mod-php
 
 
@@ -189,8 +189,18 @@ jobs:
             export AFL_AUTORESUME=1
           fi
 
-          timeout -s INT -k 2m 5h \
-            bash utils/php_fuzzing/run.sh || true
+          cp utils/php_fuzzing/run.sh /work/php7
+          cd /work/php7
+
+          docker run --rm -v "$PWD:/work" -w /work ubuntu:20.04 bash -euxc '
+            apt-get update
+
+            DEBIAN_FRONTEND=noninteractive apt-get install -y \
+              afl++
+
+            timeout -s INT -k 2m 2m \
+              bash run.sh || true
+          '
 
           # bersihkan semua proses latar belakang
           kill $PID_NC 2>/dev/null || true
