@@ -20,7 +20,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04      # di-pin supaya sama dengan job fuzz
+    runs-on: ubuntu-20.04      # di-pin supaya sama dengan job fuzz
     timeout-minutes: 90
     steps:
       - name: Dependencies
