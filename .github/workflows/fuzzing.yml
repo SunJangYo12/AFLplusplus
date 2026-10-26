@@ -46,7 +46,7 @@ jobs:
             build-essential \
             git ssh openssh-client curl jq \
             busybox-static netcat-openbsd \
-            autoconf afl libxml2-dev \
+            autoconf afl++ libxml2-dev \
             apache2 php libapache2-mod-php
 
 
