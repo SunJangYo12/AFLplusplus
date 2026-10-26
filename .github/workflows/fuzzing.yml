@@ -115,7 +115,9 @@ jobs:
           if [ -n "$ID" ] && [ "$ID" != "null" ]; then
             echo "State ditemukan di artifact (id=$ID)"
             gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > prev.zip
-            unzip -q prev.zip -d ~/prev
+            unzip -q prev.zip -d /tmp
+            tar xzf /tmp/fuzz-out.tar.gz -C ~/prev
+
             FOUND=1
             MSG="[$RUN_ID] Pakai corpus dari artifact: $NAME"
           fi
@@ -187,7 +189,7 @@ jobs:
             export AFL_AUTORESUME=1
           fi
 
-          timeout -s INT -k 2m 5m \
+          timeout -s INT -k 2m 1m \
             bash utils/php_fuzzing/run.sh || true
 
           # bersihkan semua proses latar belakang
@@ -221,19 +223,17 @@ jobs:
 
 
       - name: Collect artifacts
-        if: always()
         run: |
           mkdir -p output
 
-          cp -R /work/php7/fuzz-out output/
+          tar czvf output/fuzz-out.tar.gz -C /work/php7 fuzz-out
 
 
       - name: Upload artifact
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-state-${{ github.ref_name }}
-          path: output
+          path: output/fuzz-out.tar.gz
           retention-days: 7
 
 
