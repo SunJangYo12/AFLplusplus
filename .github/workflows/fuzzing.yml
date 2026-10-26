@@ -50,12 +50,6 @@ jobs:
             apache2 php libapache2-mod-php
 
 
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
 
       - name: Buka tunnel listener nc
         run: |
@@ -70,9 +64,13 @@ jobs:
           git clone https://github.com/sunjangyo12/ai-web
           echo 1 > ai-web/settings.txt #php8 fix
 
+          sudo service apache2 start
 
           curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
+
+          pwd
+          ls
 
           # http listener
           nohup ./cloudflared tunnel --no-autoupdate --url http://127.0.0.1:80 > wtunnel.log 2>&1 &
