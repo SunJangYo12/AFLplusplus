@@ -28,7 +28,7 @@ for ((i = 1; i < JOBS; i++)); do
 
 	afl-fuzz \
 		-S "slave$i" \
-		-D \
+		-d \
 		-i fuzz-seeds \
 		-o fuzz-out \
 		-m none -- \
