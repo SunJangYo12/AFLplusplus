@@ -189,7 +189,7 @@ jobs:
             export AFL_AUTORESUME=1
           fi
 
-          timeout -s INT -k 2m 1m \
+          timeout -s INT -k 2m 5h \
             bash utils/php_fuzzing/run.sh || true
 
           # bersihkan semua proses latar belakang
@@ -214,7 +214,7 @@ jobs:
           if [ "$TOTAL" -gt 0 ]; then
             MSG="[$RUN_ID] Done with hangs: $HANGS crash: $TOTAL total$DETAIL"
           else
-            MSG="[$RUN_ID] Done, no crash found"
+            MSG="[$RUN_ID] Done with hangs: $HANGS, no crash found"
           fi
 
           curl -s "https://api.telegram.org/bot$CHAT_TOKEN/sendMessage" \
