@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get install -y \
             git ssh openssh-client curl jq \
             busybox-static netcat-openbsd afl++\
             apache2 php libapache2-mod-php
@@ -188,11 +188,14 @@ jobs:
           #  cp -a "$GITHUB_WORKSPACE/prev/workdir/." workdir/
           #fi
 
+          export USE_ZEND_ALLOC=0
+          export AFL_NO_UI=1
+          export AFL_SKIP_CPUFREQ=1
+          export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+
           timeout -s INT -k 2m 5m \
-            USE_ZEND_ALLOC=0 AFL_NO_UI=1 \
-            AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 \
             afl-fuzz -i seeds -o out \
-            -m none -- ./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));' || true
+            -m none -- ./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));'
 
           cp -R out ~
 
