@@ -200,7 +200,10 @@ jobs:
 
             timeout -s INT -k 2m 2m \
               bash run.sh || true
+            cat fuzz-out/master/fuzzer_stats
+
           '
+          sudo chmod 777 -R /work/php7
 
           # bersihkan semua proses latar belakang
           kill $PID_NC 2>/dev/null || true
