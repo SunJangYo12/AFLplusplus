@@ -43,10 +43,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential \
             git ssh openssh-client curl jq \
-            busybox-static netcat-openbsd \
-            autoconf afl++ libxml2-dev \
+            busybox-static netcat-openbsd afl++\
             apache2 php libapache2-mod-php
 
 
@@ -154,39 +152,14 @@ jobs:
 
 
 
-
       - name: Get PHP
         run: |
-          curl -L -o php.tar.gz https://github.com/php/php-src/archive/php-7.2.11.tar.gz
-          mkdir php7
-          tar xzf php.tar.gz -C php7 --strip-components=1
+          wget https://github.com/SunJangYo12/test-ci/releases/download/php-7.2.11/result.tar.gz
+          tar xzf result.tar.gz
 
           sudo mkdir -p /work
-          sudo mv php7 /work
-          sudo chmod 777 -R /work/php7
-
-
-      - name: Patch php_cli.c (deferred init + persistent loop)
-        run: |
-          cd /work/php7
-          # Sama seperti blog: __AFL_INIT() sebelum eval, lalu while(__AFL_LOOP) di sekitar eval.zzz
-          PAT='if (zend_eval_string_ex(exec_direct, NULL, "Command line code", 1) == FAILURE) {'
-          grep -qF "$PAT" sapi/cli/php_cli.c || { echo "::error::pola di php_cli.c tidak ditemukan, sesuaikan patch"; exit 1; }
-
-          sed -i "s|${PAT}|__AFL_INIT(); while (__AFL_LOOP(10000)) ${PAT}|" sapi/cli/php_cli.c
-          grep -n "__AFL" sapi/cli/php_cli.c
-
-
-      - name: Configure
-        run: |
-          cd /work/php7
-          ./buildconf --force
-          CC=afl-clang-fast CXX=afl-clang-fast++ ./configure
-
-      - name: Make
-        run: |
-          cd /work/php7
-          AFL_USE_ASAN=1 make -j4
+          sudo chmod 777 -R /work
+          mv php7 /work
 
 
       - name: Prepare seeds
@@ -202,8 +175,6 @@ jobs:
           ls -l
 
 
-
-
       - name: Run Fuzzer AFL++
         run: |
           cd /work/php7
@@ -217,8 +188,9 @@ jobs:
           #  cp -a "$GITHUB_WORKSPACE/prev/workdir/." workdir/
           #fi
 
-          timeout -s INT -k 2m 2m \
+          timeout -s INT -k 2m 5m \
             USE_ZEND_ALLOC=0 AFL_NO_UI=1 \
+            AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 \
             afl-fuzz -i seeds -o out \
             -m none -- ./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));' || true
 
