@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             git ssh openssh-client curl jq \
             busybox-static netcat-openbsd afl++\
             apache2 php libapache2-mod-php
@@ -234,7 +234,6 @@ jobs:
         with:
           name: fuzz-state-${{ github.ref_name }}
           path: output
-          include-hidden-files: true
           retention-days: 7
 
 
