@@ -44,7 +44,7 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             git ssh openssh-client curl jq \
-            busybox-static netcat-openbsd afl++\
+            busybox-static netcat-openbsd afl++ \
             apache2 php libapache2-mod-php
 
 
