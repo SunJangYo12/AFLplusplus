@@ -4,7 +4,7 @@ name: Php Fuzzing CI  #nama ini jangan dirubah, ntah kenapa error saat loop
 # gh run cancel 38494535088 --force
 # START:
 # gh workflow list --all        # lihat status: active / disabled_manually
-# gh workflow enable "syzkaller fuzzing CI"zzzzzzzzz
+# gh workflow enable "syzkaller fuzzing CI"
 
 
 on:
@@ -70,7 +70,6 @@ jobs:
           git clone https://github.com/sunjangyo12/ai-web
           echo 1 > ai-web/settings.txt #php8 fix
 
-          sudo service apache2 start
 
           curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
