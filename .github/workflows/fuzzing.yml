@@ -196,7 +196,7 @@ jobs:
             apt-get update
 
             DEBIAN_FRONTEND=noninteractive apt-get install -y \
-              afl++
+              afl++ libxml2-dev
 
             timeout -s INT -k 2m 2m \
               bash run.sh || true
