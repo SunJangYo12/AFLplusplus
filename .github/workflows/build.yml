@@ -1,0 +1,117 @@
+name: Build PHP fuzzers (AFL++)
+
+# Build sekali, simpan di GitHub Release. Workflow "Fuzz PHP" mengambil binary dari sini.
+# Jalankan ulang hanya jika PHP_COMMIT / flag build berubah.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # untuk membuat release
+
+env:
+  MAGMA_TAG: v1.2.1
+  PHP_COMMIT: bc39abe8c3c492e29bc5d60ca58442040bbf063b   # sama dengan magma/targets/php/fetch.sh
+  RELEASE_TAG: php-fuzzers-latest
+  AFLPP_REF: v4.21c          # tag AFL++ yang di-pin; ganti jika tag ini tidak ada
+  AFLPP_PREFIX: /home/runner/aflpp
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04      # di-pin supaya sama dengan job fuzz
+    timeout-minutes: 90
+    steps:
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git ca-certificates clang llvm llvm-dev lld \
+            make autoconf automake libtool bison re2c pkg-config libonig-dev patch
+
+      - name: Cache AFL++ hasil build
+        id: aflcache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.AFLPP_PREFIX }}
+          key: aflpp-${{ env.AFLPP_REF }}-ubuntu24-clang
+
+      - name: Build AFL++ dari source
+        if: steps.aflcache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$AFLPP_REF" https://github.com/AFLplusplus/AFLplusplus.git aflpp-src
+          cd aflpp-src
+          make source-only -j"$(nproc)"
+          make install PREFIX="$AFLPP_PREFIX"
+
+      - name: Aktifkan AFL++ di PATH
+        run: |
+          echo "$AFLPP_PREFIX/bin" >> "$GITHUB_PATH"
+          "$AFLPP_PREFIX/bin/afl-fuzz" -h 2>&1 | head -1 || true
+          "$AFLPP_PREFIX/bin/afl-clang-fast" --version
+
+      - name: Fetch php-src + setup.patch Magma
+        run: |
+          git clone --no-checkout https://github.com/php/php-src.git php-src
+          git -C php-src checkout "$PHP_COMMIT"
+          git clone --depth 1 --branch "$MAGMA_TAG" https://github.com/HexHive/magma.git magma
+          patch -p1 -d php-src < magma/targets/php/patches/setup/setup.patch
+
+      - name: Cari libAFLDriver.a
+        id: drv
+        run: |
+          D=$(find "$AFLPP_PREFIX" -name 'libAFLDriver.a' 2>/dev/null | head -1)
+          [ -n "$D" ] || { echo "::error::libAFLDriver.a tidak terpasang oleh make install; cek utils/aflpp_driver atau pakai afl_driver.cpp Magma"; exit 1; }
+          echo "path=$D" >> "$GITHUB_OUTPUT"
+
+      - name: Build (afl-clang-fast + ASAN)
+        working-directory: php-src
+        env:
+          AFL_USE_ASAN: "1"
+        run: |
+          export CC=afl-clang-fast CXX=afl-clang-fast++
+          export EXTRA_CFLAGS="-O1 -g -fno-sanitize=object-size"
+          export EXTRA_CXXFLAGS="$EXTRA_CFLAGS"
+          ./buildconf --force
+          LIB_FUZZING_ENGINE="${{ steps.drv.outputs.path }}" ./configure \
+            --disable-all --enable-option-checking=fatal \
+            --enable-fuzzer --enable-exif --enable-phar --enable-mbstring \
+            --without-pcre-jit --disable-phpdbg --disable-cgi --with-pic
+          make -j"$(nproc)"
+
+      - name: Seed corpora
+        working-directory: php-src
+        run: |
+          export ASAN_OPTIONS=detect_leaks=0 USE_ZEND_ALLOC=0
+          sapi/cli/php sapi/fuzzer/generate_unserialize_dict.php
+          sapi/cli/php sapi/fuzzer/generate_parser_corpus.php
+          for d in unserialize json exif parser; do
+            mkdir -p "sapi/fuzzer/corpus/$d"
+            [ -n "$(ls -A sapi/fuzzer/corpus/$d)" ] || printf 'a' > "sapi/fuzzer/corpus/$d/seed"
+          done
+
+      - name: Package
+        run: |
+          mkdir -p pkg/corpus
+          for d in unserialize json exif parser; do
+            cp php-src/sapi/fuzzer/php-fuzz-$d pkg/$d
+            cp -r php-src/sapi/fuzzer/corpus/$d pkg/corpus/$d
+          done
+          cp php-src/sapi/fuzzer/dict/unserialize pkg/unserialize.dict 2>/dev/null || true
+          # bawa afl-fuzz yang sama persis dengan yang dipakai saat build
+          mkdir -p pkg/bin
+          cp "$AFLPP_PREFIX/bin/afl-fuzz" "$AFLPP_PREFIX/bin/afl-whatsup" pkg/bin/
+          echo "--- dependensi dinamis afl-fuzz:"; ldd pkg/bin/afl-fuzz
+          echo "afl++ $AFLPP_REF" > pkg/BUILD_INFO
+          echo "php_commit $PHP_COMMIT" >> pkg/BUILD_INFO
+          echo "runner $(lsb_release -ds)" >> pkg/BUILD_INFO
+          tar czf php-fuzzers.tgz pkg
+          cat pkg/BUILD_INFO
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete "$RELEASE_TAG" --cleanup-tag -y 2>/dev/null || true
+          gh release create "$RELEASE_TAG" php-fuzzers.tgz \
+            --title "PHP fuzzers ($(date -u +%F))" \
+            --notes "$(cat pkg/BUILD_INFO)" --prerelease

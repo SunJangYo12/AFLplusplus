@@ -1,0 +1,102 @@
+name: Fuzz PHP (binary dari release)
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Durasi fuzzing per driver (menit, maks ~300)"
+        default: "60"
+  schedule:
+    - cron: "0 20 * * 0"
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: php-fuzzers-latest
+  FUZZ_MINUTES: ${{ github.event.inputs.minutes || '60' }}
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04      # HARUS sama dengan runner di workflow build
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: [unserialize, json, exif, parser]
+    steps:
+      - name: Runtime dependency binary PHP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libonig5
+
+      - name: Ambil binary dari release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern php-fuzzers.tgz
+          tar xzf php-fuzzers.tgz
+          cat pkg/BUILD_INFO
+          chmod +x pkg/bin/*
+          echo "$PWD/pkg/bin" >> "$GITHUB_PATH"
+          pkg/bin/afl-fuzz -h 2>&1 | head -1 || true
+
+      - name: Siapkan kernel (bisa tanpa container)
+        run: |
+          echo core | sudo tee /proc/sys/kernel/core_pattern
+          sudo sysctl -w kernel.randomize_va_space=2 >/dev/null || true
+
+      - name: Restore corpus dari run sebelumnya
+        uses: actions/cache@v4
+        with:
+          path: carry/${{ matrix.driver }}
+          key: php-${{ matrix.driver }}-corpus-${{ github.run_id }}
+          restore-keys: php-${{ matrix.driver }}-corpus-
+
+      - name: afl-fuzz
+        env:
+          AFL_NO_UI: "1"
+          AFL_SKIP_CPUFREQ: "1"
+          AFL_NO_AFFINITY: "1"
+          USE_ZEND_ALLOC: "0"
+          ASAN_OPTIONS: abort_on_error=1:detect_leaks=0:symbolize=0
+        run: |
+          D=${{ matrix.driver }}
+          mkdir -p "carry/$D" out
+          if [ -n "$(ls -A carry/$D 2>/dev/null)" ]; then IN="carry/$D"; else IN="pkg/corpus/$D"; fi
+          DICT=""; [ "$D" = unserialize ] && [ -f pkg/unserialize.dict ] && DICT="-x pkg/unserialize.dict"
+          SECS=$(( FUZZ_MINUTES * 60 ))
+          N=$(nproc)
+          afl-fuzz -i "$IN" -o out -M main -V "$SECS" -m none $DICT -- "pkg/$D" > main.log 2>&1 &
+          for i in $(seq 1 $((N-1))); do
+            afl-fuzz -i "$IN" -o out -S "s$i" -V "$SECS" -m none $DICT -- "pkg/$D" > "s$i.log" 2>&1 &
+          done
+          wait || true
+          afl-whatsup -s out || true
+
+      - name: Simpan corpus
+        if: always()
+        run: |
+          mkdir -p "carry/${{ matrix.driver }}"
+          cp out/main/queue/id* "carry/${{ matrix.driver }}/" 2>/dev/null || true
+
+      - name: Ringkas
+        if: always()
+        run: |
+          {
+            echo "## ${{ matrix.driver }}"
+            echo "crash: $(ls out/*/crashes/id* 2>/dev/null | wc -l)"
+            echo "hang:  $(ls out/*/hangs/id* 2>/dev/null | wc -l)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: findings-${{ matrix.driver }}
+          path: |
+            out/*/crashes
+            out/*/hangs
+            out/*/fuzzer_stats
+            out/*/plot_data
+            *.log
+          if-no-files-found: ignore
