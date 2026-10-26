@@ -14,6 +14,8 @@ echo "CPU tersedia : $CPU_COUNT"
 echo "AFL workers  : $JOBS"
 
 
+./sapi/cli/php --help
+
 # Master
 afl-fuzz \
 	-M master \
