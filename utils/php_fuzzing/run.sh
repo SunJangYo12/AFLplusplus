@@ -14,8 +14,6 @@ echo "CPU tersedia : $CPU_COUNT"
 echo "AFL workers  : $JOBS"
 
 
-./sapi/cli/php --help
-
 # Master
 afl-fuzz \
 	-M master \
@@ -26,16 +24,16 @@ afl-fuzz \
 
 
 # Slaves
-#for ((i = 1; i < JOBS; i++)); do
+for ((i = 1; i < JOBS; i++)); do
 
-#	afl-fuzz \
-#		-S "slave$i" \
-#		-D \
-#		-i fuzz-seeds \
-#		-o fuzz-out \
-#		-m none -- \
-#		./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));' 2>&1 &
-#done
+	afl-fuzz \
+		-S "slave$i" \
+		-D \
+		-i fuzz-seeds \
+		-o fuzz-out \
+		-m none -- \
+		./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));' 2>&1 &
+done
 
 wait
 
