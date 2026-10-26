@@ -50,7 +50,6 @@ jobs:
             apache2 php libapache2-mod-php
 
 
-
       - name: Buka tunnel listener nc
         run: |
           #ubah www-data ke root
@@ -68,9 +67,6 @@ jobs:
 
           curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
-
-          pwd
-          ls
 
           # http listener
           nohup ./cloudflared tunnel --no-autoupdate --url http://127.0.0.1:80 > wtunnel.log 2>&1 &
