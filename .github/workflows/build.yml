@@ -4,7 +4,7 @@ name: Build PHP fuzzers (AFL++)
 # Jalankan ulang hanya jika PHP_COMMIT / flag build berubah.
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # gh workflow run build.yml --ref v4.32c-fuzzing-inci-php-magma
 
 permissions:
   contents: write   # untuk membuat release
@@ -18,7 +18,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04      # di-pin supaya sama dengan job fuzz
+    runs-on: ubuntu-20.04      # di-pin supaya sama dengan job fuzz
     timeout-minutes: 90
     steps:
       - name: Dependencies
