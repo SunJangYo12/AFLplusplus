@@ -176,7 +176,7 @@ jobs:
       - name: Patch php_cli.c (deferred init + persistent loop)
         run: |
           cd /work/php7
-          # Sama seperti blog: __AFL_INIT() sebelum eval, lalu while(__AFL_LOOP) di sekitar eval.
+          # Sama seperti blog: __AFL_INIT() sebelum eval, lalu while(__AFL_LOOP) di sekitar eval.zzz
           PAT='if (zend_eval_string_ex(exec_direct, NULL, "Command line code", 1) == FAILURE) {'
           grep -qF "$PAT" sapi/cli/php_cli.c || { echo "::error::pola di php_cli.c tidak ditemukan, sesuaikan patch"; exit 1; }
 
