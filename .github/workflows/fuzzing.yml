@@ -192,13 +192,15 @@ jobs:
           cp utils/php_fuzzing/run.sh /work/php7
           cd /work/php7
 
+          sudo echo core >/proc/sys/kernel/core_pattern
+
           docker run --rm -v "$PWD:/work" -w /work ubuntu:20.04 bash -euxc '
             apt-get update
 
             DEBIAN_FRONTEND=noninteractive apt-get install -y \
               afl++ libxml2-dev
 
-            timeout -s INT -k 2m 5.6h \
+            timeout -s INT -k 2m 2m \
               bash run.sh || true
 
             cat fuzz-out/master/fuzzer_stats
