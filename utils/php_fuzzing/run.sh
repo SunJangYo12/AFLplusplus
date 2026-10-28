@@ -23,7 +23,7 @@ echo "AFL workers  : $JOBS"
 # Master
 afl-fuzz \
 	-M master \
-	-i fuzz-seeds \
+	-i- \
 	-o fuzz-out \
     -V $DURATION \
 	-m none -- \
@@ -36,7 +36,7 @@ for ((i = 1; i < JOBS; i++)); do
 	afl-fuzz \
 		-S "slave$i" \
 		-d \
-		-i fuzz-seeds \
+		-i- \
 		-o fuzz-out \
 	    -V $DURATION \
 		-m none -- \
