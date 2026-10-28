@@ -13,6 +13,7 @@ on:
     branches: [v4.32c-fuzzing-inci-php]
     paths:
       - ".github/workflows/fuzzing.yml"
+      - "utils/php_fuzzing/run.sh"
   schedule:
     - cron: "0 */6 * * *"   # opsional, jaring pengaman kalau rantai putus
 

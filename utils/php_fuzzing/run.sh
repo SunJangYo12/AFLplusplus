@@ -20,7 +20,7 @@ echo "CPU tersedia : $CPU_COUNT"
 echo "AFL workers  : $JOBS"
 
 
-# Masterzzzzzzzz
+# Master
 afl-fuzz \
 	-M master \
 	-i- \
