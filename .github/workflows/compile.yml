@@ -17,7 +17,7 @@ env:
   PHP_COMMIT: bc39abe8c3c492e29bc5d60ca58442040bbf063b   # sama dengan magma/targets/php/fetch.sh
   RELEASE_TAG: php-fuzzers-latest
   AFLPP_REF: v4.21c          # tag AFL++ yang di-pin
-  IMAGE: ubuntu:20.04        # di-pin supaya sama dengan job fuzz
+  IMAGE: ubuntu:18.04        # di-pin supaya sama dengan job fuzz
 
 jobs:
   build:
