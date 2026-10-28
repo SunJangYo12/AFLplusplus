@@ -198,7 +198,7 @@ jobs:
             DEBIAN_FRONTEND=noninteractive apt-get install -y \
               afl++ libxml2-dev
 
-            timeout -s INT -k 2m 2m \
+            timeout -s INT -k 2m 5.6h \
               bash run.sh || true
 
             cat fuzz-out/master/fuzzer_stats
