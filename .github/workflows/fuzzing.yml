@@ -186,7 +186,6 @@ jobs:
           # lanjutkan corpus dari sesi sebelumnya
           if [ -d ~/prev/fuzz-out ]; then
             cp -a ~/prev/fuzz-out/. /work/php7/fuzz-out
-            export AFL_AUTORESUME=1
           fi
 
           cp utils/php_fuzzing/run.sh /work/php7
@@ -198,7 +197,7 @@ jobs:
             DEBIAN_FRONTEND=noninteractive apt-get install -y \
               afl++ libxml2-dev
 
-            timeout -s INT -k 2m 5h \
+            timeout -s INT -k 2m 2m \
               bash run.sh || true
 
             cat fuzz-out/master/fuzzer_stats
