@@ -17,7 +17,7 @@ env:
   PHP_COMMIT: bc39abe8c3c492e29bc5d60ca58442040bbf063b   # sama dengan magma/targets/php/fetch.sh
   RELEASE_TAG: php-fuzzers-latest
   AFLPP_REF: v4.21c          # tag AFL++ yang di-pin
-  IMAGE: ubuntu:18.04        # di-pin supaya sama dengan job fuzz
+  IMAGE: ubuntu:20.04        # di-pin supaya sama dengan job fuzz
 
 jobs:
   build:
@@ -37,7 +37,9 @@ jobs:
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               build-essential git ca-certificates clang llvm llvm-dev lld \
-              make autoconf automake libtool bison re2c pkg-config libonig-dev patch
+              make autoconf automake libtool bison re2c pkg-config libonig-dev patch \
+              libc++-dev \
+              libc++abi-dev
 
             export AFLPP_PREFIX=/opt/aflpp
 
