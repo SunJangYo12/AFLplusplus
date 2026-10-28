@@ -4,6 +4,8 @@ export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
 export AFL_NO_AFFINITY=1
 
 
+DURATION="${DURATION:-19800}" #5.5 jam
+
 
 
 # Deteksi CPU yang tersedia
@@ -23,6 +25,7 @@ afl-fuzz \
 	-M master \
 	-i fuzz-seeds \
 	-o fuzz-out \
+    -V $DURATION \
 	-m none -- \
 	./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));' 2>&1 &
 
@@ -35,6 +38,7 @@ for ((i = 1; i < JOBS; i++)); do
 		-d \
 		-i fuzz-seeds \
 		-o fuzz-out \
+	    -V $DURATION \
 		-m none -- \
 		./sapi/cli/php -r 'unserialize(file_get_contents("php://stdin"));' 2>&1 &
 done
