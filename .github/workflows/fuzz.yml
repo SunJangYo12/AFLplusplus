@@ -108,7 +108,7 @@ jobs:
             done
 
             # main di foreground
-            timout 18000 ./pkg/bin/afl-fuzz \
+            timeout 18000 ./pkg/bin/afl-fuzz \
               -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
               -M master -m none -t 2000 \
               -V "$SECONDS" $DICT \
