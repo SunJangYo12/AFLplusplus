@@ -53,7 +53,7 @@ jobs:
 
             chmod +x pkg/"$TARGET" pkg/bin/*
             ldd pkg/bin/afl-fuzz
-            "./pkg/$TARGET --help"
+            "./pkg/bin/$TARGET --help"
 
             DICT=""
             if [ "$TARGET" = unserialize ] && [ -f pkg/unserialize.dict ]; then
