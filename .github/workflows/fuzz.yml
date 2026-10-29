@@ -9,7 +9,7 @@ on:
     inputs:
       seconds:
         description: "Durasi fuzzing per target (detik)"
-        default: "60" #"18000"        # 5 jam
+        default: "260" #"18000"        # 5 jam
       targets:
         description: "Target (JSON array)"
         default: '["unserialize","json","exif","parser"]'
@@ -27,7 +27,7 @@ permissions:
 env:
   RELEASE_TAG: php-fuzzers-latest
   IMAGE: ubuntu:20.04
-  SECONDS_DEFAULT: "60" #"18000"
+  SECONDS_DEFAULT: "260" #"18000"
 
 jobs:
   fuzz:
@@ -124,6 +124,31 @@ jobs:
             echo "hangs:   $(find findings/$TARGET -path "*/hangs/id:*" | wc -l)"
           '
 
+      - name: Ringkasan
+        if: always()
+        run: |
+          T="${{ matrix.target }}"
+          D="findings/$T"
+          sum() { cat $D/*/fuzzer_stats 2>/dev/null | awk -F': *' -v k="$1" '$1==k{s+=$2} END{print s+0}'; }
+          {
+            echo "• $T"
+            echo "  instance: $(ls -d $D/*/ 2>/dev/null | wc -l)"
+            echo "  exec/s (akhir): $(sum execs_per_sec)"
+            echo "  paths: $(sum corpus_count)"
+            echo "  crashes: $(sum saved_crashes) | hangs: $(sum saved_hangs)"
+          } > "summary-$T.txt"
+          cat "summary-$T.txt"
+
+      - name: Upload ringkasan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: summary-${{ matrix.target }}
+          path: summary-${{ matrix.target }}.txt
+          retention-days: 1
+
+
+
       - name: Kompres
         if: always()
         run: |
@@ -154,6 +179,7 @@ jobs:
           retention-days: 7
           overwrite: true
 
+
   # Dijalankan setelah SEMUA target selesai -> picu putaran berikutnya
   next:
     needs: fuzz
@@ -173,3 +199,31 @@ jobs:
             -f targets='${{ inputs.targets || '["unserialize","json","exif","parser"]' }}' \
             -f loop=true \
             -f generation="$GEN"
+
+  report:
+    needs: fuzz
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: summary-*
+          merge-multiple: true
+
+      - name: Kirim ke Telegram
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -z "$TOKEN" ] && exit 0
+          {
+            echo "📊 Fuzz PHP - gen ${{ inputs.generation || 1 }}"
+            echo "durasi: ${{ inputs.seconds || env.SECONDS_DEFAULT }} detik"
+            echo "status job: ${{ needs.fuzz.result }}"
+            echo
+            cat summary-*.txt 2>/dev/null || echo "(ringkasan tidak ada)"
+            echo
+            echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > msg.txt
+          curl -sS -m 30 -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+            -d chat_id="$CHAT" --data-urlencode "text@msg.txt"
