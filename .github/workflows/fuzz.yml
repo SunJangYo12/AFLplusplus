@@ -12,7 +12,7 @@ on:
         default: "18000"        # 5 jam
       targets:
         description: "Target (JSON array)"
-        default: '["unserialize","json","exif","parser"]'
+        default: '["unserialize","json","exif","parser","mbstring"]'
       loop:
         description: "Lanjutkan otomatis setelah selesai (true/false)"
         default: "true"
@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON(inputs.targets || '["unserialize","json","exif","parser"]') }}
+        target: ${{ fromJSON(inputs.targets || '["unserialize","json","exif","parser","mbstring"]' ) }}
 
     steps:
       - name: Download paket dari release
@@ -209,7 +209,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --ref "${{ github.ref_name }}" \
             -f seconds="${{ inputs.seconds || env.SECONDS_DEFAULT }}" \
-            -f targets='${{ inputs.targets || '["unserialize","json","exif","parser"]' }}' \
+            -f targets='${{ inputs.targets || '["unserialize","json","exif","parser","mbstring"]' }}' \
             -f loop=true \
             -f generation="$GEN"
 
