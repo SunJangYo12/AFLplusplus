@@ -53,6 +53,7 @@ jobs:
 
             chmod +x pkg/"$TARGET" pkg/bin/*
             ldd pkg/bin/afl-fuzz
+            "./pkg/$TARGET --help"
 
             DICT=""
             if [ "$TARGET" = unserialize ] && [ -f pkg/unserialize.dict ]; then
@@ -64,7 +65,7 @@ jobs:
               -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
               -m none -t 2000 \
               -V "420" $DICT \
-              -- "./pkg/$TARGET" \
+              -- "./pkg/$TARGET" @@ \
               || true
             echo "=========== done fuzzing $TARGET ================"
 
