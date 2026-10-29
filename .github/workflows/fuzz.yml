@@ -9,7 +9,7 @@ on:
     inputs:
       seconds:
         description: "Durasi fuzzing per target (detik)"
-        default: "120" #"18000"        # 5 jam
+        default: "60" #"18000"        # 5 jam
       targets:
         description: "Target (JSON array)"
         default: '["unserialize","json","exif","parser"]'
@@ -27,7 +27,7 @@ permissions:
 env:
   RELEASE_TAG: php-fuzzers-latest
   IMAGE: ubuntu:20.04
-  SECONDS_DEFAULT: "18000"
+  SECONDS_DEFAULT: "60" #"18000"
 
 jobs:
   fuzz:
