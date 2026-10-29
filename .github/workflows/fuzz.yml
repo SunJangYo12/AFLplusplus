@@ -91,30 +91,51 @@ jobs:
               DICT="-x pkg/unserialize.dict"
             fi
 
-            # Jika sudah ada state, AFL_AUTORESUME meneruskannya (-i dipertahankan)
-            echo "=========== start fuzzing $TARGET ================"
+
+
+            NCPU=$(nproc)
+            echo "Core tersedia: $NCPU"
+            export AFL_FINAL_SYNC=1      # main melakukan sync terakhir sebelum berhenti
+
+            echo "=========== start fuzzing $TARGET ($NCPU instance) ================"
+
+            # secondary: s1 .. s(N-1), jalan di background
+            for i in $(seq 1 $((NCPU-1))); do
+              ./pkg/bin/afl-fuzz \
+                -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
+                -S "s$i" -m none -t 2000 \
+                -V "$SECONDS" $DICT \
+                -- "./pkg/$TARGET" >/dev/null 2>&1 &
+            done
+
+            # main di foreground
             ./pkg/bin/afl-fuzz \
               -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
-              -m none -t 2000 \
+              -M master -m none -t 2000 \
               -V "$SECONDS" $DICT \
               -- "./pkg/$TARGET" \
               || true
+
+            wait   # tunggu semua secondary selesai
             echo "=========== done fuzzing $TARGET ================"
 
             ./pkg/bin/afl-whatsup -s "findings/$TARGET" || true
-            echo "crashes: $(ls findings/$TARGET/default/crashes 2>/dev/null | grep -vc README || true)"
-            echo "hangs:   $(ls findings/$TARGET/default/hangs 2>/dev/null | grep -vc README || true)"
+            echo "crashes: $(find findings/$TARGET -path "*/crashes/id:*" | wc -l)"
+            echo "hangs:   $(find findings/$TARGET -path "*/hangs/id:*" | wc -l)"
           '
 
       - name: Kompres
         if: always()
         run: |
           sudo chown -R "$USER" findings
+
           tar czf findings-${{ matrix.target }}.tar.gz \
-            --exclude='*/default/.synced' \
+            --exclude='.synced' \
             -C findings .
+
           # state untuk resume (nama file khusus)
           cp findings-${{ matrix.target }}.tar.gz state-${{ matrix.target }}.tar.gz
+
 
       - name: Upload hasil (arsip)
         if: always()
