@@ -1,102 +1,94 @@
-name: Fuzz PHP (binary dari release)
+name: Fuzz PHP
+
+# Mengambil paket hasil compile.yml dari GitHub Release lalu menjalankan afl-fuzz
+# di dalam container ubuntu:24.04 (sama dengan container build), satu job per target.
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # gh workflow run fuzz.yml --ref v4.32c-fuzzing-inci-php-magma
     inputs:
       minutes:
-        description: "Durasi fuzzing per driver (menit, maks ~300)"
+        description: "Durasi fuzzing per target (menit, maks 340)"
         default: "60"
-  schedule:
-    - cron: "0 20 * * 0"
+      targets:
+        description: "Target (JSON array)"
+        default: '["unserialize","json","exif","parser"]'
 
 permissions:
   contents: read
 
 env:
   RELEASE_TAG: php-fuzzers-latest
-  FUZZ_MINUTES: ${{ github.event.inputs.minutes || '60' }}
+  IMAGE: ubuntu:20.04        # harus sama dengan IMAGE di compile.yml
 
 jobs:
   fuzz:
-    runs-on: ubuntu-24.04      # HARUS sama dengan runner di workflow build
+    runs-on: ubuntu-latest
     timeout-minutes: 355
     strategy:
       fail-fast: false
       matrix:
-        driver: [unserialize, json, exif, parser]
-    steps:
-      - name: Runtime dependency binary PHP
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libonig5
+        target: ${{ fromJSON(inputs.targets || '["unserialize","json","exif","parser"]') }}
 
-      - name: Ambil binary dari release
+    steps:
+      - name: Download paket dari release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern php-fuzzers.tgz
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern php-fuzzers.tgz
           tar xzf php-fuzzers.tgz
           cat pkg/BUILD_INFO
-          chmod +x pkg/bin/*
-          echo "$PWD/pkg/bin" >> "$GITHUB_PATH"
-          pkg/bin/afl-fuzz -h 2>&1 | head -1 || true
+          mkdir -p findings
 
-      - name: Siapkan kernel (bisa tanpa container)
+
+      - name: Fuzzing ${{ matrix.target }} di container
         run: |
-          echo core | sudo tee /proc/sys/kernel/core_pattern
-          sudo sysctl -w kernel.randomize_va_space=2 >/dev/null || true
+          docker run --rm -v "$PWD:/work" -w /work \
+            -e TARGET="${{ matrix.target }}" \
+            -e MINUTES="${{ inputs.minutes || '60' }}" \
+            "$IMAGE" bash -euxc '
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              libonig5 llvm
 
-      - name: Restore corpus dari run sebelumnya
-        uses: actions/cache@v4
+            export AFL_SKIP_CPUFREQ=1 AFL_NO_UI=1 AFL_AUTORESUME=1 AFL_IGNORE_PROBLEMS=1
+            export USE_ZEND_ALLOC=0
+            export ASAN_OPTIONS=abort_on_error=1:detect_leaks=0:symbolize=0:allocator_may_return_null=1:handle_segv=0:handle_sigbus=0:handle_abort=0:handle_sigfpe=0:handle_sigill=0
+
+            chmod +x pkg/"$TARGET" pkg/bin/*
+            ldd pkg/bin/afl-fuzz
+
+            DICT=""
+            if [ "$TARGET" = unserialize ] && [ -f pkg/unserialize.dict ]; then
+              DICT="-x pkg/unserialize.dict"
+            fi
+
+            echo "=========== start fuzzing $TARGET ================"
+            ./pkg/bin/afl-fuzz \
+              -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
+              -m none -t 2000 \
+              -V "$((MINUTES * 60))" $DICT \
+              -- "./pkg/$TARGET" \
+              || true
+            echo "=========== done fuzzing $TARGET ================"
+
+            ./pkg/bin/afl-whatsup -s "findings/$TARGET" || true
+            echo "crashes: $(ls findings/$TARGET/default/crashes 2>/dev/null | grep -vc README || true)"
+            echo "hangs:   $(ls findings/$TARGET/default/hangs 2>/dev/null | grep -vc README || true)"
+          '
+
+      - name: Kompres
+        if: always()
+        run: |
+          sudo chown -R "$USER" findings
+          tar czvf findings-${{ matrix.target }}.tar.gz \
+            --exclude='*/default/.synced' \
+            -C findings .
+
+      - name: Upload hasil
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          path: carry/${{ matrix.driver }}
-          key: php-${{ matrix.driver }}-corpus-${{ github.run_id }}
-          restore-keys: php-${{ matrix.driver }}-corpus-
-
-      - name: afl-fuzz
-        env:
-          AFL_NO_UI: "1"
-          AFL_SKIP_CPUFREQ: "1"
-          AFL_NO_AFFINITY: "1"
-          USE_ZEND_ALLOC: "0"
-          ASAN_OPTIONS: abort_on_error=1:detect_leaks=0:symbolize=0
-        run: |
-          D=${{ matrix.driver }}
-          mkdir -p "carry/$D" out
-          if [ -n "$(ls -A carry/$D 2>/dev/null)" ]; then IN="carry/$D"; else IN="pkg/corpus/$D"; fi
-          DICT=""; [ "$D" = unserialize ] && [ -f pkg/unserialize.dict ] && DICT="-x pkg/unserialize.dict"
-          SECS=$(( FUZZ_MINUTES * 60 ))
-          N=$(nproc)
-          afl-fuzz -i "$IN" -o out -M main -V "$SECS" -m none $DICT -- "pkg/$D" > main.log 2>&1 &
-          for i in $(seq 1 $((N-1))); do
-            afl-fuzz -i "$IN" -o out -S "s$i" -V "$SECS" -m none $DICT -- "pkg/$D" > "s$i.log" 2>&1 &
-          done
-          wait || true
-          afl-whatsup -s out || true
-
-      - name: Simpan corpus
-        if: always()
-        run: |
-          mkdir -p "carry/${{ matrix.driver }}"
-          cp out/main/queue/id* "carry/${{ matrix.driver }}/" 2>/dev/null || true
-
-      - name: Ringkas
-        if: always()
-        run: |
-          {
-            echo "## ${{ matrix.driver }}"
-            echo "crash: $(ls out/*/crashes/id* 2>/dev/null | wc -l)"
-            echo "hang:  $(ls out/*/hangs/id* 2>/dev/null | wc -l)"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: findings-${{ matrix.driver }}
-          path: |
-            out/*/crashes
-            out/*/hangs
-            out/*/fuzzer_stats
-            out/*/plot_data
-            *.log
-          if-no-files-found: ignore
+          name: findings-${{ matrix.target }}
+          path: findings-${{ matrix.target }}.tar.gz
+          retention-days: 30
