@@ -235,7 +235,8 @@ jobs:
             echo "status job: ${{ needs.fuzz.result }}"
             echo
             cat summary-*.txt 2>/dev/null || echo "(ringkasan tidak ada)"
-            #echo
+            echo
+            echo "${{ github.run_id }}"
             #echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > msg.txt
           curl -sS -m 30 -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
