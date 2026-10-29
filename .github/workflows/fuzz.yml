@@ -45,7 +45,8 @@ jobs:
             "$IMAGE" bash -euxc '
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              libonig5 llvm
+              libonig5 llvm libc++-dev libc++abi-dev
+
 
             export AFL_SKIP_CPUFREQ=1 AFL_NO_UI=1 AFL_AUTORESUME=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
             export USE_ZEND_ALLOC=0
@@ -53,8 +54,7 @@ jobs:
 
             chmod +x pkg/"$TARGET" pkg/bin/*
             ldd pkg/bin/afl-fuzz
-            ls pkg
-            ls pkg/bin
+            "./pkg/bin/$TARGET --help"
 
             DICT=""
             if [ "$TARGET" = unserialize ] && [ -f pkg/unserialize.dict ]; then
