@@ -6,6 +6,8 @@ name: Fuzz PHP
 on:
   push:
     branches: [v4.32c-fuzzing-inci-php-magma]
+    paths:
+      - ".github/workflows/fuzz.yml"
 
   workflow_dispatch: # gh workflow run fuzz.yml --ref v4.32c-fuzzing-inci-php-magma
     inputs:

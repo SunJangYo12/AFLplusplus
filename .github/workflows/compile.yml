@@ -7,6 +7,9 @@ name: Build PHP fuzzers (AFL++)
 on:
   push:
     branches: [v4.32c-fuzzing-inci-php-magma]
+    paths:
+      - ".github/workflows/compile.yml"
+
   workflow_dispatch: # gh workflow run compile.yml --ref v4.32c-fuzzing-inci-php-magma
 
 permissions:
