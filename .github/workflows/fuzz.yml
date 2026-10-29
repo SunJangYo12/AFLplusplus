@@ -1,34 +1,39 @@
 name: Fuzz PHP
 
-# Mengambil paket hasil compile.yml dari GitHub Release lalu menjalankan afl-fuzz
-# di dalam container ubuntu:24.04 (sama dengan container build), satu job per target.
-
 on:
   push:
     branches: [v4.32c-fuzzing-inci-php-magma]
     paths:
       - ".github/workflows/fuzz.yml"
-  workflow_dispatch: # gh workflow run fuzz.yml --ref v4.32c-fuzzing-inci-php-magma
+  workflow_dispatch:
     inputs:
       seconds:
-        description: "Durasi fuzzing per target"
-        default: "60"
+        description: "Durasi fuzzing per target (detik)"
+        default: "120" #"18000"        # 5 jam
       targets:
         description: "Target (JSON array)"
         default: '["unserialize","json","exif","parser"]'
+      loop:
+        description: "Lanjutkan otomatis setelah selesai (true/false)"
+        default: "true"
+      generation:
+        description: "Nomor putaran (jangan diisi manual)"
+        default: "1"
 
 permissions:
   contents: read
+  actions: write      # untuk memicu run berikutnya & membaca artifact
 
 env:
   RELEASE_TAG: php-fuzzers-latest
-  IMAGE: ubuntu:20.04        # harus sama dengan IMAGE di compile.yml
+  IMAGE: ubuntu:20.04
+  SECONDS_DEFAULT: "18000"
 
 jobs:
   fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 355
-    strategy: # run 4 job pararel
+    strategy:
       fail-fast: false
       matrix:
         target: ${{ fromJSON(inputs.targets || '["unserialize","json","exif","parser"]') }}
@@ -44,12 +49,32 @@ jobs:
           cat pkg/BUILD_INFO
           mkdir -p findings
 
+      # ---- RESUME: ambil state dari run terakhir yang sukses/selesai ----
+      - name: Restore state run sebelumnya
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          # cari artifact "state-<target>" terbaru (belum expired)
+          ID=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/artifacts?name=state-${{ matrix.target }}&per_page=1" \
+            --jq '.artifacts[0] | select(.expired==false) | .id')
+          if [ -n "$ID" ]; then
+            echo "Ketemu state artifact id=$ID, mengunduh..."
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" > state.zip
+            unzip -o state.zip
+            mkdir -p findings
+            tar xzf state-${{ matrix.target }}.tar.gz -C findings
+            ls -la findings/${{ matrix.target }}/default 2>/dev/null | head
+          else
+            echo "Tidak ada state sebelumnya, mulai dari awal."
+          fi
 
       - name: Fuzzing ${{ matrix.target }} di container
         run: |
           docker run --rm -v "$PWD:/work" -w /work \
             -e TARGET="${{ matrix.target }}" \
-            -e SECONDS="${{ inputs.seconds }}" \
+            -e SECONDS="${{ inputs.seconds || env.SECONDS_DEFAULT }}" \
             "$IMAGE" bash -euxc '
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -60,14 +85,13 @@ jobs:
             export ASAN_OPTIONS=abort_on_error=1:detect_leaks=0:symbolize=0:allocator_may_return_null=1:handle_segv=0:handle_sigbus=0:handle_abort=0:handle_sigfpe=0:handle_sigill=0
 
             chmod +x pkg/"$TARGET" pkg/bin/*
-            ldd pkg/bin/afl-fuzz
 
             DICT=""
             if [ "$TARGET" = unserialize ] && [ -f pkg/unserialize.dict ]; then
               DICT="-x pkg/unserialize.dict"
             fi
 
-
+            # Jika sudah ada state, AFL_AUTORESUME meneruskannya (-i dipertahankan)
             echo "=========== start fuzzing $TARGET ================"
             ./pkg/bin/afl-fuzz \
               -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
@@ -76,7 +100,6 @@ jobs:
               -- "./pkg/$TARGET" \
               || true
             echo "=========== done fuzzing $TARGET ================"
-
 
             ./pkg/bin/afl-whatsup -s "findings/$TARGET" || true
             echo "crashes: $(ls findings/$TARGET/default/crashes 2>/dev/null | grep -vc README || true)"
@@ -87,14 +110,45 @@ jobs:
         if: always()
         run: |
           sudo chown -R "$USER" findings
-          tar czvf findings-${{ matrix.target }}.tar.gz \
+          tar czf findings-${{ matrix.target }}.tar.gz \
             --exclude='*/default/.synced' \
             -C findings .
+          # state untuk resume (nama file khusus)
+          cp findings-${{ matrix.target }}.tar.gz state-${{ matrix.target }}.tar.gz
 
-      - name: Upload hasil
+      - name: Upload hasil (arsip)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: findings-${{ matrix.target }}
+          name: findings-${{ matrix.target }}-gen${{ inputs.generation || '1' }}
           path: findings-${{ matrix.target }}.tar.gz
           retention-days: 30
+
+      - name: Upload state (untuk lanjut)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-${{ matrix.target }}
+          path: state-${{ matrix.target }}.tar.gz
+          retention-days: 7
+          overwrite: true
+
+  # Dijalankan setelah SEMUA target selesai -> picu putaran berikutnya
+  next:
+    needs: fuzz
+    if: always() && (inputs.loop == 'true' || github.event_name == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger putaran berikutnya
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          GEN=$(( ${{ inputs.generation || 1 }} + 1 ))
+          echo "Memicu generation $GEN"
+          gh workflow run fuzz.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "${{ github.ref_name }}" \
+            -f seconds="${{ inputs.seconds || env.SECONDS_DEFAULT }}" \
+            -f targets='${{ inputs.targets || '["unserialize","json","exif","parser"]' }}' \
+            -f loop=true \
+            -f generation="$GEN"
