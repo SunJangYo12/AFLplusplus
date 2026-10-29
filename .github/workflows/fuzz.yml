@@ -124,18 +124,31 @@ jobs:
             echo "hangs:   $(find findings/$TARGET -path "*/hangs/id:*" | wc -l)"
           '
 
+
       - name: Ringkasan
         if: always()
         run: |
           T="${{ matrix.target }}"
+          sudo chown -R "$USER" findings
           D="findings/$T"
-          sum() { cat $D/*/fuzzer_stats 2>/dev/null | awk -F': *' -v k="$1" '$1==k{s+=$2} END{print s+0}'; }
+
+          total() { cat $D/*/fuzzer_stats 2>/dev/null | awk -F' *: *' -v k="$1" '$1==k{s+=$2} END{printf "%d", s}'; }
+          maxv()  { cat $D/*/fuzzer_stats 2>/dev/null | awk -F' *: *' -v k="$1" '$1==k && $2+0>m{m=$2+0} END{printf "%d", m}'; }
+
+          PATHS=$(maxv corpus_count); [ "$PATHS" = 0 ] && PATHS=$(maxv paths_total)
+          CRASH=$(find $D -path '*/crashes/id:*' 2>/dev/null | wc -l)
+          HANGS=$(find $D -path '*/hangs/id:*' 2>/dev/null | wc -l)
+
+          echo "--- debug ---"
+          ls $D
+          head -30 $D/*/fuzzer_stats 2>/dev/null | head -40
+
           {
             echo "• $T"
             echo "  instance: $(ls -d $D/*/ 2>/dev/null | wc -l)"
-            echo "  exec/s (akhir): $(sum execs_per_sec)"
-            echo "  paths: $(sum corpus_count)"
-            echo "  crashes: $(sum saved_crashes) | hangs: $(sum saved_hangs)"
+            echo "  exec/s: $(total execs_per_sec)"
+            echo "  paths: $PATHS"
+            echo "  crashes: $CRASH | hangs: $HANGS"
           } > "summary-$T.txt"
           cat "summary-$T.txt"
 
@@ -222,8 +235,8 @@ jobs:
             echo "status job: ${{ needs.fuzz.result }}"
             echo
             cat summary-*.txt 2>/dev/null || echo "(ringkasan tidak ada)"
-            echo
-            echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            #echo
+            #echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > msg.txt
           curl -sS -m 30 -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
             -d chat_id="$CHAT" --data-urlencode "text@msg.txt"
