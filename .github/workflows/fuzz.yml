@@ -4,6 +4,9 @@ name: Fuzz PHP
 # di dalam container ubuntu:24.04 (sama dengan container build), satu job per target.
 
 on:
+  push:
+    branches: [v4.32c-fuzzing-inci-php-magma]
+
   workflow_dispatch: # gh workflow run fuzz.yml --ref v4.32c-fuzzing-inci-php-magma
     inputs:
       minutes:
