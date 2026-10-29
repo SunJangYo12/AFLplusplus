@@ -9,7 +9,7 @@ on:
     inputs:
       seconds:
         description: "Durasi fuzzing per target (detik)"
-        default: "60" #"18000"        # 5 jam
+        default: "18000"        # 5 jam
       targets:
         description: "Target (JSON array)"
         default: '["unserialize","json","exif","parser"]'
@@ -27,7 +27,7 @@ permissions:
 env:
   RELEASE_TAG: php-fuzzers-latest
   IMAGE: ubuntu:20.04
-  SECONDS_DEFAULT: "60" #"18000"
+  SECONDS_DEFAULT: "18000"
 
 jobs:
   fuzz:
@@ -71,6 +71,7 @@ jobs:
           fi
 
       - name: Fuzzing ${{ matrix.target }} di container
+        timeout-minutes: 330      # 5,5 jam; sisakan ~25 menit untuk kompres+upload
         run: |
           docker run --rm -v "$PWD:/work" -w /work \
             -e TARGET="${{ matrix.target }}" \
@@ -99,7 +100,7 @@ jobs:
 
             # secondary: s1 .. s(N-1), jalan di background
             for i in $(seq 1 $((NCPU-1))); do
-              ./pkg/bin/afl-fuzz \
+              timeout 18000 ./pkg/bin/afl-fuzz \
                 -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
                 -S "s$i" -m none -t 2000 \
                 -V "$SECONDS" $DICT \
@@ -107,7 +108,7 @@ jobs:
             done
 
             # main di foreground
-            ./pkg/bin/afl-fuzz \
+            timout 18000 ./pkg/bin/afl-fuzz \
               -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
               -M master -m none -t 2000 \
               -V "$SECONDS" $DICT \
