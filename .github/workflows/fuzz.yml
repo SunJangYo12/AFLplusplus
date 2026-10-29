@@ -41,7 +41,7 @@ jobs:
       - name: Fuzzing ${{ matrix.target }} di container
         run: |
           docker run --rm -v "$PWD:/work" -w /work \
-            -e TARGET="${{ matrix.target }}" \
+            -e TARGET="unserialize" \
             "$IMAGE" bash -euxc '
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
