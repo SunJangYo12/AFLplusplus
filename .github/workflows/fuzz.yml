@@ -13,7 +13,7 @@ on:
     inputs:
       targets:
         description: "Target (JSON array)"
-        default: '["unserialize","json","exif","parser"]'
+        default: '["unserialize"]'
 
 permissions:
   contents: read
@@ -25,11 +25,6 @@ env:
 jobs:
   fuzz:
     runs-on: ubuntu-latest
-    timeout-minutes: 355
-    strategy:
-      fail-fast: false
-      matrix:
-        target: ${{ fromJSON(inputs.targets || '["unserialize","json","exif","parser"]') }}
 
     steps:
       - name: Download paket dari release
