@@ -16,9 +16,9 @@ permissions:
   contents: write   # wajib untuk membuat release
 
 env:
-  ONIG_REF: v6.9.9           # tag oniguruma yang di-pin
+  ONIG_REF: v6.9.9
   MAGMA_TAG: v1.2.1
-  PHP_COMMIT: bc39abe8c3c492e29bc5d60ca58442040bbf063b   # sama dengan magma/targets/php/fetch.sh
+  PHP_COMMIT: bc39abe8c3c492e29bc5d60ca58442040bbf063b
   RELEASE_TAG: php-fuzzers-latest
   AFLPP_REF: v4.21c          # tag AFL++ yang di-pin
   IMAGE: ubuntu:20.04        # di-pin supaya sama dengan job fuzz
@@ -98,28 +98,23 @@ jobs:
 
             # cek mbstring
             ls -la sapi/fuzzer/php-fuzz-*
-            for d in mbstring mbregex; do
-              [ -x sapi/fuzzer/php-fuzz-$d ] || { echo "php-fuzz-$d tidak terbentuk"; exit 1; }
-            done
+            [ -x sapi/fuzzer/php-fuzz-mbstring ] || { echo "php-fuzz-mbstring tidak terbentuk"; exit 1; }
 
 
             echo "=========== seed corpora ================"
             export ASAN_OPTIONS=detect_leaks=0 USE_ZEND_ALLOC=0
             sapi/cli/php sapi/fuzzer/generate_unserialize_dict.php
             sapi/cli/php sapi/fuzzer/generate_parser_corpus.php
-            for d in unserialize json exif parser mbstring mbregex; do
+            for d in unserialize json exif parser mbstring; do
               mkdir -p "sapi/fuzzer/corpus/$d"
               [ -n "$(ls -A sapi/fuzzer/corpus/$d)" ] || printf a > "sapi/fuzzer/corpus/$d/seed"
             done
             printf "caf\xc3\xa9 \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e" > sapi/fuzzer/corpus/mbstring/utf8
-            printf "a+b*\0aaabbb"        > sapi/fuzzer/corpus/mbregex/s1
-            printf "(\\w+)@(\\w+)\0x@y"  > sapi/fuzzer/corpus/mbregex/s2
-            printf "[a-z]{2,5}\0hello"   > sapi/fuzzer/corpus/mbregex/s3
 
             echo "=========== package ================"
             cd ..
             mkdir -p pkg/corpus pkg/bin
-            for d in unserialize json exif parser mbstring mbregex; do
+            for d in unserialize json exif parser mbstring; do
               cp php-src/sapi/fuzzer/php-fuzz-$d pkg/$d
               cp -r php-src/sapi/fuzzer/corpus/$d pkg/corpus/$d
             done
