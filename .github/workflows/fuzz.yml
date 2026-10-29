@@ -91,13 +91,11 @@ jobs:
               DICT="-x pkg/unserialize.dict"
             fi
 
-
-
             NCPU=$(nproc)
             echo "Core tersedia: $NCPU"
             export AFL_FINAL_SYNC=1      # main melakukan sync terakhir sebelum berhenti
 
-            echo "=========== start fuzzing $TARGET ($NCPU instance) ================"
+            echo "=========== Start fuzzing $TARGET ($NCPU instance) ================"
 
             # secondary: s1 .. s(N-1), jalan di background
             for i in $(seq 1 $((NCPU-1))); do
@@ -117,7 +115,8 @@ jobs:
               || true
 
             wait   # tunggu semua secondary selesai
-            echo "=========== done fuzzing $TARGET ================"
+            echo "=========== Done fuzzing $TARGET ================"
+
 
             ./pkg/bin/afl-whatsup -s "findings/$TARGET" || true
             echo "crashes: $(find findings/$TARGET -path "*/crashes/id:*" | wc -l)"
