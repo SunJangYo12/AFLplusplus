@@ -111,10 +111,10 @@ jobs:
               mkdir -p "sapi/fuzzer/corpus/$d"
               [ -n "$(ls -A sapi/fuzzer/corpus/$d)" ] || printf a > "sapi/fuzzer/corpus/$d/seed"
             done
-            printf 'caf\xc3\xa9 \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e' > sapi/fuzzer/corpus/mbstring/utf8
-            printf 'a+b*\0aaabbb'        > sapi/fuzzer/corpus/mbregex/s1
-            printf '(\\w+)@(\\w+)\0x@y'  > sapi/fuzzer/corpus/mbregex/s2
-            printf '[a-z]{2,5}\0hello'   > sapi/fuzzer/corpus/mbregex/s3
+            printf "caf\xc3\xa9 \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e" > sapi/fuzzer/corpus/mbstring/utf8
+            printf "a+b*\0aaabbb"        > sapi/fuzzer/corpus/mbregex/s1
+            printf "(\\w+)@(\\w+)\0x@y"  > sapi/fuzzer/corpus/mbregex/s2
+            printf "[a-z]{2,5}\0hello"   > sapi/fuzzer/corpus/mbregex/s3
 
             echo "=========== package ================"
             cd ..
