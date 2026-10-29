@@ -12,7 +12,7 @@ on:
     inputs:
       minutes:
         description: "Durasi fuzzing per target (menit, maks 340/6jam)"
-        default: "2"
+        default: "1" #1menit
       targets:
         description: "Target (JSON array)"
         default: '["unserialize","json","exif","parser"]'
@@ -67,6 +67,7 @@ jobs:
               DICT="-x pkg/unserialize.dict"
             fi
 
+
             echo "=========== start fuzzing $TARGET ================"
             ./pkg/bin/afl-fuzz \
               -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
@@ -75,6 +76,7 @@ jobs:
               -- "./pkg/$TARGET" \
               || true
             echo "=========== done fuzzing $TARGET ================"
+
 
             ./pkg/bin/afl-whatsup -s "findings/$TARGET" || true
             echo "crashes: $(ls findings/$TARGET/default/crashes 2>/dev/null | grep -vc README || true)"
