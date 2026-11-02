@@ -53,29 +53,52 @@ jobs:
       - name: Restore state run sebelumnya
         env:
           GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN: ${{ github.run_id }}
+          CURRENT_BRANCH: ${{ github.ref_name }}
         run: |
-          set +e
-          # cari artifact "state-<target>" terbaru (belum expired)
+          set -e
+
           ID=$(gh api \
-            "repos/$GITHUB_REPOSITORY/actions/artifacts?name=state-${{ matrix.target }}&per_page=1" \
-            --jq '.artifacts[0] | select(.expired==false) | .id')
+            "repos/$GITHUB_REPOSITORY/actions/artifacts?name=state-${{ matrix.target }}&per_page=100" \
+            --jq '
+              [
+                .artifacts[]
+                | select(.expired == false)
+                | select((.workflow_run.id | tostring) != env.CURRENT_RUN)
+                | select(.workflow_run.head_branch == env.CURRENT_BRANCH)
+              ]
+              | sort_by(.created_at)
+              | last
+              | .id // empty
+            ')
+
           if [ -n "$ID" ]; then
-            echo "Ketemu state artifact id=$ID, mengunduh..."
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" > state.zip
+            echo "Mengambil state artifact ID=$ID"
+
+            gh api \
+              "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" \
+              > state.zip
+
             unzip -o state.zip
+
             mkdir -p findings
-            tar xzf state-${{ matrix.target }}.tar.gz -C findings
-            ls -la findings/${{ matrix.target }}/default 2>/dev/null | head
+
+            tar xzf "state-${{ matrix.target }}.tar.gz" \
+              -C findings
+
+            echo "State berhasil direstore:"
+            ls -lah "findings/${{ matrix.target }}"
           else
-            echo "Tidak ada state sebelumnya, mulai dari awal."
+            echo "Tidak ditemukan state sebelumnya."
           fi
+
 
       - name: Fuzzing ${{ matrix.target }} di container
         timeout-minutes: 330      # 5,5 jam; sisakan ~25 menit untuk kompres+upload
         run: |
           docker run --rm -v "$PWD:/work" -w /work \
             -e TARGET="${{ matrix.target }}" \
-            -e SECONDS="${{ inputs.seconds || env.SECONDS_DEFAULT }}" \
+            -e FUZZ_SECONDS="${{ inputs.seconds || env.SECONDS_DEFAULT }}" \
             "$IMAGE" bash -euxc '
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -103,7 +126,7 @@ jobs:
               timeout 18000 ./pkg/bin/afl-fuzz \
                 -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
                 -S "s$i" -m none -t 2000 \
-                -V "$SECONDS" $DICT \
+                -V "$FUZZ_SECONDS" $DICT \
                 -- "./pkg/$TARGET" >/dev/null 2>&1 &
             done
 
@@ -111,7 +134,7 @@ jobs:
             timeout 18000 ./pkg/bin/afl-fuzz \
               -i "pkg/corpus/$TARGET" -o "findings/$TARGET" \
               -M master -m none -t 2000 \
-              -V "$SECONDS" $DICT \
+              -V "$FUZZ_SECONDS" $DICT \
               -- "./pkg/$TARGET" \
               || true
 
