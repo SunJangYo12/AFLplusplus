@@ -9,7 +9,7 @@ on:
     inputs:
       seconds:
         description: "Durasi fuzzing per target (detik)"
-        default: "18000"        # 5 jam
+        default: "160" #"18000"        # 5 jam
       targets:
         description: "Target (JSON array)"
         default: '["unserialize","json","exif","parser","mbstring"]'
@@ -27,7 +27,7 @@ permissions:
 env:
   RELEASE_TAG: php-fuzzers-latest
   IMAGE: ubuntu:20.04
-  SECONDS_DEFAULT: "18000"
+  SECONDS_DEFAULT: "160" #"18000"
 
 jobs:
   fuzz:
@@ -73,14 +73,10 @@ jobs:
             ')
 
           if [ -n "$ID" ]; then
-            echo "Mengambil state artifact ID=$ID"
+            echo "Mengambil state artifact ID=$ID" | tee log_state.txt
 
-            gh api \
-              "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" \
-              > state.zip
-
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" > state.zip
             unzip -o state.zip
-
             mkdir -p findings
 
             tar xzf "state-${{ matrix.target }}.tar.gz" \
@@ -89,7 +85,7 @@ jobs:
             echo "State berhasil direstore:"
             ls -lah "findings/${{ matrix.target }}"
           else
-            echo "Tidak ditemukan state sebelumnya."
+            echo "Tidak ditemukan state sebelumnya." | tee log_state.txt
           fi
 
 
@@ -172,6 +168,7 @@ jobs:
             echo "  exec/s: $(total execs_per_sec)"
             echo "  paths: $PATHS"
             echo "  crashes: $CRASH | hangs: $HANGS"
+            cat log_state.txt
           } > "summary-$T.txt"
           cat "summary-$T.txt"
 
