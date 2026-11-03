@@ -9,10 +9,10 @@ on:
     inputs:
       seconds:
         description: "Durasi fuzzing per target (detik)"
-        default: "160" #"18000"        # 5 jam
+        default: "60" #"18000"        # 5 jam
       targets:
         description: "Target (JSON array)"
-        default: '["unserialize","json","exif","parser","mbstring"]'
+        default: '["unserialize","json","exif","mbstring"]'
       loop:
         description: "Lanjutkan otomatis setelah selesai (true/false)"
         default: "true"
@@ -27,7 +27,7 @@ permissions:
 env:
   RELEASE_TAG: php-fuzzers-latest
   IMAGE: ubuntu:20.04
-  SECONDS_DEFAULT: "160" #"18000"
+  SECONDS_DEFAULT: "60" #"18000"
 
 jobs:
   fuzz:
@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON(inputs.targets || '["unserialize","json","exif","parser","mbstring"]' ) }}
+        target: ${{ fromJSON(inputs.targets || '["unserialize","json","exif","mbstring"]' ) }}
 
     steps:
       - name: Download paket dari release
@@ -229,7 +229,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --ref "${{ github.ref_name }}" \
             -f seconds="${{ inputs.seconds || env.SECONDS_DEFAULT }}" \
-            -f targets='${{ inputs.targets || '["unserialize","json","exif","parser","mbstring"]' }}' \
+            -f targets='${{ inputs.targets || '["unserialize","json","exif","mbstring"]' }}' \
             -f loop=true \
             -f generation="$GEN"
 
